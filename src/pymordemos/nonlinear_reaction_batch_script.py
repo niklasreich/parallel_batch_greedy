@@ -17,7 +17,7 @@ def main(
     # mpi_comm = MPI.COMM_WORLD
     # mpi_rank = mpi_comm.Get_rank()
 
-    set_log_levels({'pymor': 'INFO'})
+    set_log_levels({'pymor': 'INFO', 'pymor.algorithms.newton': 'WARN'})
 
     domain = RectDomain(([0,0], [1,1]))
     l = ExpressionFunction('100 * sin(2 * pi * x[0]) * sin(2 * pi * x[1])', dim_domain = 2)
@@ -34,10 +34,10 @@ def main(
     if batchsize==0: batchsize = len(pool)
 
     diameter = 1/36  # comparable to original paper 
-    ei_snapshots = 12  # same as paper (creates 12x12 grid)
-    ei_size = 20  # maximum number of bases in EIM
-    rb_size = 45  # maximum number of bases in RBM
-    test_snapshots = 15 # same as paper (creates 15x15 grid)
+    ei_snapshots = 6  # 12 same as paper (creates 12x12 grid)
+    ei_size = 20  # 20 maximum number of bases in EIM
+    rb_size = 30  # 45 maximum number of bases in RBM
+    test_snapshots = 3 # 15 same as paper (creates 15x15 grid)
 
     tic = time.perf_counter()
 

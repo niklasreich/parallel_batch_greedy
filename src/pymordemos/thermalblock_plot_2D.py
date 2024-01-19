@@ -29,7 +29,7 @@ from os.path import isfile
 # plt.switch_backend('QtaAgg')
 
 M=20
-plot_batches = [1, 2, 4, 8, 12]
+plot_batches = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
 max_batchsize = 30
 max_P = 16
 
@@ -58,7 +58,7 @@ for p in range(1, max_P+1):
 
     for bs in range(1, max_batchsize+1):
 
-        file_string = f'thermalblock_3x2_N{p}_BS{bs}.pkl'
+        file_string = f'thermalblock_3x2_N{p}_BS{bs}_nopp.pkl'
 
         if isfile(file_string):
             with open(file_string, 'rb') as f:
@@ -67,6 +67,10 @@ for p in range(1, max_P+1):
             if plot_this_batch[bs] and p==1:
                 plt.subplot(221)
                 plt.semilogy(results['max_rel_errors'][0],'x:',label=f'$b={bs}$')
+                import pandas
+                df = pandas.DataFrame()
+                df = df.assign(err=results['max_rel_errors'][0])
+                df.to_csv('thermal_bs' + str(bs) + '_nopp.dat', sep=',')
                 # plt.subplot(224)
                 # plt.semilogy(results['max_rel_errors'][0][1:]/results['max_rel_errors'][0][:-1],'x:',label=f'$bs={bs}$')
 
