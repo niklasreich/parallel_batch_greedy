@@ -208,6 +208,7 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
             stopped = True
             break
 
+    tic_pp = time.perf_counter()
     max_errs_pp = []
     if postprocessing:
         logger.info(f'Postprocessing...')
@@ -239,12 +240,15 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
 
 
 
-    tictoc = time.perf_counter() - tic
-    logger.info(f'Greedy search took {tictoc} seconds')
+    toc = time.perf_counter()
+    logger.info(f'Greedy search took {toc - tic} seconds')
+    timings = surrogate.times
+    timings['postprocess'] = toc - tic_pp
+    timings['greedy'] = toc - tic
     return {'max_errs_iter': max_errs_iter, 'max_err_mus_iter': max_err_mus_iter,
             'max_errs_ext': max_errs_ext, 'max_err_mus_ext': max_err_mus_ext,
             'extensions': extensions, 'iterations': iterations,
-            'time': tictoc, 'max_errs_pp': max_errs_pp}
+            'timings': timings, 'max_errs_pp': max_errs_pp}
 
 
 class WeakGreedySurrogate(BasicObject):
@@ -337,6 +341,7 @@ def rb_batch_greedy(fom, reductor, training_set, use_error_estimator=True, error
     result = weak_batch_greedy(surrogate, training_set, atol=atol, rtol=rtol, max_extensions=max_extensions, pool=pool,
                                batchsize=batchsize, greedy_start=greedy_start, postprocessing=postprocessing)
     result['rom'] = surrogate.rom
+    result['greedytimes'] = surrogate.times
 
     return result
 
@@ -356,6 +361,9 @@ class RBSurrogate(WeakGreedySurrogate):
                 pool.push(fom), pool.push(error_norm), pool.push(reductor)
         self.remote_fom = pool.push(fom)
         self.rom = None
+
+        self.times = {'solve': 0, 'extend': 0, 'reduce': 0}
+
 
     def evaluate(self, mus, return_all_values=False):
         if self.rom is None:
@@ -386,9 +394,13 @@ class RBSurrogate(WeakGreedySurrogate):
             msg = f'Computing solution snapshot for mu = {mus[0]} ...'
         else:
             msg = f'Computing solution snapshots for mu = {", ".join(str(mu) for mu in mus)} ...'
+        tic = time.perf_counter()
         with self.logger.block(msg):
             Us = self.pool.map(_parallel_solve, mus, fom=self.remote_fom)
+        toc = time.perf_counter()
+        self.times['solve'] += toc - tic
 
+        tic = time.perf_counter()
         successful_extensions = 0
         for U in Us:
             with self.logger.block('Extending basis with solution snapshot ...'):
@@ -403,26 +415,34 @@ class RBSurrogate(WeakGreedySurrogate):
                     successful_extensions += 1
                 except ExtensionError:
                     self.logger.info('Extension failed.')
+        toc = time.perf_counter()
+        self.times['extend'] += toc -tic
 
         if not successful_extensions:
             self.logger.info('All extensions failed.')
             raise ExtensionError
 
+        tic = time.perf_counter()
         if not self.use_error_estimator:
             self.remote_reductor = self.pool.push(self.reductor)
         with self.logger.block('Reducing ...'):
             self.rom = self.reductor.reduce()
+        toc = time.perf_counter()
+        self.times['reduce'] += toc - tic
 
         return successful_extensions
 
 
 def _rb_surrogate_evaluate(rom=None, fom=None, reductor=None, mus=None, error_norm=None,
-                           return_all_values=False, use_error_estimator=True):
+                           return_all_values=False, use_error_estimator=False):
     if not mus:
         if return_all_values:
             return []
         else:
             return -1., None
+        
+    if fom is None:
+        use_error_estimator = True
 
     if use_error_estimator:
         errors = [rom.estimate_error(mu) for mu in mus]

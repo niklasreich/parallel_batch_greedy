@@ -119,9 +119,10 @@ def main(
     results['num_iterations'] = greedy_data['iterations']
     results['max_errs_pp'] = greedy_data['max_errs_pp']
 
-    results['val_time'] = online_time  # Specify what time is saved
+    results['timings'] = greedy_data['greedytimes'] 
+    results['timings']['online'] = online_time  # Specify what time is saved
     results.pop('time', None)  # Delete old key
-    results['calc_time'] = offline_time # Also save offline time
+    results['timings']['offline'] = offline_time # Also save offline time
 
     with open(f'thermalblock_{xblocks}x{yblocks}_N{len(pool)}_BS{batchsize}.pkl', 'wb') as fp:
             pickle.dump(results, fp)
