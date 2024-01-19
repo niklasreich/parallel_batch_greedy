@@ -354,6 +354,7 @@ class RBSurrogate(WeakGreedySurrogate):
         else:
             self.remote_fom, self.remote_error_norm, self.remote_reductor = \
                 pool.push(fom), pool.push(error_norm), pool.push(reductor)
+        self.remote_fom = pool.push(fom)
         self.rom = None
 
     def evaluate(self, mus, return_all_values=False):
@@ -370,7 +371,8 @@ class RBSurrogate(WeakGreedySurrogate):
                                  reductor=self.remote_reductor,
                                  mus=mus,
                                  error_norm=self.remote_error_norm,
-                                 return_all_values=return_all_values)
+                                 return_all_values=return_all_values,
+                                 use_error_estimator=self.use_error_estimator)
         if return_all_values:
             return np.hstack(result)
         else:
@@ -414,14 +416,15 @@ class RBSurrogate(WeakGreedySurrogate):
         return successful_extensions
 
 
-def _rb_surrogate_evaluate(rom=None, fom=None, reductor=None, mus=None, error_norm=None, return_all_values=False):
+def _rb_surrogate_evaluate(rom=None, fom=None, reductor=None, mus=None, error_norm=None,
+                           return_all_values=False, use_error_estimator=True):
     if not mus:
         if return_all_values:
             return []
         else:
             return -1., None
 
-    if fom is None:
+    if use_error_estimator:
         errors = [rom.estimate_error(mu) for mu in mus]
     elif error_norm is not None:
         errors = [error_norm(fom.solve(mu) - reductor.reconstruct(rom.solve(mu))) for mu in mus]
