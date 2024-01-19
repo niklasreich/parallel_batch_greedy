@@ -124,6 +124,8 @@ def main(
     results.pop('time', None)  # Delete old key
     results['timings']['offline'] = offline_time # Also save offline time
 
+    results['settings'] = {'grid': grid, 'rb_size': rb_size, 'rtol': rtol, 'test_snapshots': test_snapshots, 'n_online': n_online}
+
     with open(f'thermalblock_{xblocks}x{yblocks}_N{len(pool)}_BS{batchsize}.pkl', 'wb') as fp:
             pickle.dump(results, fp)
 
