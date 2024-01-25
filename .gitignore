@@ -77,3 +77,4 @@ Pipfile.lock
 
 src/pymordemos/thermalblock_results
 src/pymordemos/results
+*.pkl
