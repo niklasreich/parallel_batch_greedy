@@ -362,10 +362,11 @@ class RBSurrogate(WeakGreedySurrogate):
         self.remote_fom = pool.push(fom)
         self.rom = None
 
-        self.times = {'solve': 0, 'extend': 0, 'reduce': 0}
+        self.times = {'evaluate': 0, 'extend': 0, 'reduce': 0, 'solve': 0}
 
 
     def evaluate(self, mus, return_all_values=False):
+        tic = time.perf_counter()
         if self.rom is None:
             with self.logger.block('Reducing ...'):
                 self.rom = self.reductor.reduce()
@@ -381,6 +382,8 @@ class RBSurrogate(WeakGreedySurrogate):
                                  error_norm=self.remote_error_norm,
                                  return_all_values=return_all_values,
                                  use_error_estimator=self.use_error_estimator)
+        toc = time.perf_counter()
+        self.times['evaluate'] += toc - tic
         if return_all_values:
             return np.hstack(result)
         else:
