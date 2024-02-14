@@ -33,15 +33,15 @@ plot_batches = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
 max_batchsize = 30
 max_P = 16
 
-calc_times = []
-val_times = []
+t_offline = []
+t_online = []
 num_ext = []
 num_iter = []
 num_pp = []
 batchsizes = []
 
-calc_times_p = []
-val_times_p = []
+t_offline_p = []
+t_online_p = []
 num_ext_p = []
 num_iter_p = []
 num_pp_p = []
@@ -58,7 +58,7 @@ for p in range(1, max_P+1):
 
     for bs in range(1, max_batchsize+1):
 
-        file_string = f'thermalblock_3x2_N{p}_BS{bs}_nopp.pkl'
+        file_string = f'src/pymordemos/thermalblock_2x2_N{p}_BS{bs}.pkl'
 
         if isfile(file_string):
             with open(file_string, 'rb') as f:
@@ -67,23 +67,23 @@ for p in range(1, max_P+1):
             if plot_this_batch[bs] and p==1:
                 plt.subplot(221)
                 plt.semilogy(results['max_rel_errors'][0],'x:',label=f'$b={bs}$')
-                import pandas
-                df = pandas.DataFrame()
-                df = df.assign(err=results['max_rel_errors'][0])
-                df.to_csv('thermal_bs' + str(bs) + '_nopp.dat', sep=',')
+                # import pandas
+                # df = pandas.DataFrame()
+                # df = df.assign(err=results['max_rel_errors'][0])
+                # df.to_csv('thermal_bs' + str(bs) + '_nopp.dat', sep=',')
                 # plt.subplot(224)
                 # plt.semilogy(results['max_rel_errors'][0][1:]/results['max_rel_errors'][0][:-1],'x:',label=f'$bs={bs}$')
 
             if p==1:
-                calc_times.append(results['calc_time'])
-                val_times.append(results['val_time'])
+                t_offline.append(results['timings']['offline'])
+                t_online.append(results['timings']['online'])
                 num_ext.append(results['num_extensions'])
                 num_iter.append(results['num_iterations'])
                 num_pp.append(results['num_extensions'] - len(results['max_errs_pp']) + 1)
                 batchsizes.append(bs)
             elif p==bs:
-                calc_times_p.append(results['calc_time'])
-                val_times_p.append(results['val_time'])
+                t_offline_p.append(results['timings']['offline'])
+                t_online_p.append(results['timings']['online'])
                 num_ext_p.append(results['num_extensions'])
                 num_iter_p.append(results['num_iterations'])
                 num_pp_p.append(results['num_extensions'] - len(results['max_errs_pp']) + 1)
@@ -91,8 +91,8 @@ for p in range(1, max_P+1):
 
 
 plt.subplot(222)
-plt.plot(batchsizes, calc_times, 'o:', label='sequential')
-plt.plot(batchsizes_p, calc_times_p, 'o:', label='mpi parallel')
+plt.plot(batchsizes, t_offline, 'o:', label='sequential')
+plt.plot(batchsizes_p, t_offline_p, 'o:', label='mpi parallel')
 plt.xlabel('Batch size $b$')
 plt.ylabel('Offline greedy time in [$s$]')
 plt.legend(loc=0)
@@ -110,7 +110,7 @@ plt.legend(loc=0)
 plt.grid()
 
 plt.subplot(224)
-plt.plot(batchsizes, val_times, 'o:')
+plt.plot(batchsizes, t_online, 'o:')
 #plt.plot(batchsizes_p, val_times_p, 'o:', label='mpi parallel')
 plt.xlabel('Batch size $b$')
 plt.ylabel('online time per $\mu$ in [$s$]')
