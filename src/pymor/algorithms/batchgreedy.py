@@ -140,7 +140,7 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
                     # for 'standard' start with the chronological frist snapshots
                     # in the first batch
                     logger.info('First batch computation: standard.')
-                else:
+                elif not greedy_start == 'single_zero':
                     logger.info('Unknwon starting method for th greedy alogrithm. Aborting now.')
                     return
             for i in range(batchsize):
@@ -159,6 +159,9 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
                 this_i_errs[max_ind] = 0
 
                 appended_mus.append(training_set[max_ind])
+                
+                if greedy_start == 'single_zero' and (extensions == 0) and (iterations == 0):
+                    break
 
             # max_errs.append(max_err)
             # max_err_mus.append(max_err_mu)
@@ -184,7 +187,7 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
                 except ExtensionError:
                     pass
         else:
-            for i in range(batchsize):
+            for i in range(len(this_i_mus)):
                 with logger.block(f'Extending surrogate for mu = {this_i_mus[i]} ...'):
                     try:
                         # if i==batchsize-1:
