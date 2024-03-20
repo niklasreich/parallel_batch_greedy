@@ -43,8 +43,8 @@ def main(
     assert batchsize>=0, 'Batch size must be nonnegative.'
     if batchsize==0: batchsize = len(pool)
 
-    grid = 36
-    rb_size = 100
+    grid = 1000
+    rb_size = 150
     rtol = 1e-5
     test_snapshots = 100
 
@@ -87,7 +87,8 @@ def main(
                                   pool=pool,
                                   batchsize=batchsize,
                                   rtol=rtol,
-                                  postprocessing=True
+                                  postprocessing=True,
+                                  greedy_start='single_zero'
                                   )
 
     toc = time.perf_counter()
@@ -104,7 +105,7 @@ def main(
                                        error_estimator_norm_index=0,
                                        test_mus=test_sample,
                                        basis_sizes=0,
-                                       pool=pool
+                                       pool=None
                                        )
 
     # Online time
@@ -126,7 +127,7 @@ def main(
 
     results['settings'] = {'grid': grid, 'rb_size': rb_size, 'rtol': rtol, 'test_snapshots': test_snapshots, 'n_online': n_online}
 
-    with open(f'thermalblock_{xblocks}x{yblocks}_N{len(pool)}_BS{batchsize}.pkl', 'wb') as fp:
+    with open(f'thermalblock_{xblocks}x{yblocks}_N{len(pool)}_BS{batchsize}_singlezero.pkl', 'wb') as fp:
             pickle.dump(results, fp)
 
     # global test_results
