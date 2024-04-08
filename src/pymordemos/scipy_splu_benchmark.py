@@ -33,7 +33,7 @@ def main(
     """scipy splu benchmark."""
 
     n = 2002001
-    nnz = 14006001/(2002001**2)*(n**2)
+    nnz = int(np.max((14006001/(2002001**2)*(n**2),1.05*n)))
 
     tic  = time.perf_counter()
 
