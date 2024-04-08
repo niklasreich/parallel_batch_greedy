@@ -12,6 +12,12 @@ from datetime import datetime
 
 from typer import Argument, Option, run
 
+import scikits.umfpack as um
+
+umfpack = um.UmfpackContext()
+umfpack.control[um.UMFPACK_PRL] = 4 # Let's be more verbose.
+
+
 # from pymor.algorithms.error import plot_reduction_error_analysis, reduction_error_analysis, plot_batch_reduction
 # from pymor.core.pickle import dump
 # from pymor.parallel.default import new_parallel_pool, dummy_pool
@@ -26,8 +32,8 @@ def main(
 ):
     """scipy splu benchmark."""
 
-    n = 10000
-    nnz = 50000
+    n = 2002001
+    nnz = 14006001
 
     tic  = time.perf_counter()
 
@@ -43,12 +49,23 @@ def main(
 
         tic  = time.perf_counter()
 
-        factorization = sp.linalg.splu(matrix, permc_spec='COLAMD')
-        sol = factorization.solve(rhs)
+        factorization = um.splu(matrix)
+        sol_u = factorization.solve(rhs)
+
+        toc  = time.perf_counter()
+        
+        print(f'Elapsed time for umfpack: {toc-tic}')
+
+        tic  = time.perf_counter()
+
+        factorization = sp.linalg.splu(matrix)
+        sol_s = factorization.solve(rhs)
 
         toc  = time.perf_counter()
 
-        print(f'Elapsed time: {toc-tic}')
+        print(f'Elapsed time for SuperLU: {toc-tic}')
+
+        print(f'Difference: {np.linalg.norm(sol_u - sol_s)}')
 
         # timings = np.zeros(n_times)
 
