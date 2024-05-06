@@ -44,7 +44,7 @@ def main(
     if batchsize==0: batchsize = len(pool)
 
     grid = 1000
-    rb_size = 150
+    rb_size = 300
     rtol = 1e-5
     test_snapshots = 100
 
@@ -88,13 +88,14 @@ def main(
                                   batchsize=batchsize,
                                   rtol=rtol,
                                   postprocessing=True,
-                                  greedy_start='single_zero'
+                                  # greedy_start='single_zero'
                                   )
 
     toc = time.perf_counter()
     offline_time = toc - tic
 
     rom = greedy_data['rom']
+    rom_pp = greedy_data['rom_pp']
     
     test_sample = parameter_space.sample_randomly(test_snapshots)
     results = reduction_error_analysis(rom,
@@ -115,6 +116,12 @@ def main(
         reductor.reconstruct(rom.solve(mu))
     toc = time.perf_counter()
     online_time = (toc - tic)/n_online
+
+    tic = time.perf_counter()
+    for mu in parameter_space.sample_randomly(n_online):
+        reductor.reconstruct(rom_pp.solve(mu))
+    toc = time.perf_counter()
+    online_time_pp = (toc - tic)/n_online
     
     results['num_extensions'] = greedy_data['extensions']
     results['num_iterations'] = greedy_data['iterations']
@@ -122,12 +129,14 @@ def main(
 
     results['timings'] = greedy_data['greedytimes'] 
     results['timings']['online'] = online_time  # Specify what time is saved
+    results['timings']['online_pp'] = online_time_pp  # Specify what time is saved
     results.pop('time', None)  # Delete old key
-    results['timings']['offline'] = offline_time # Also save offline time
+    results['timings']['offline_pp'] = offline_time # Also save offline time
+    results['timings']['offline'] = offline_time - results['timings']['postprocess']# Also save offline time
 
     results['settings'] = {'grid': grid, 'rb_size': rb_size, 'rtol': rtol, 'test_snapshots': test_snapshots, 'n_online': n_online}
 
-    with open(f'thermalblock_{xblocks}x{yblocks}_N{len(pool)}_BS{batchsize}_singlezero.pkl', 'wb') as fp:
+    with open(f'thermalblock_{xblocks}x{yblocks}_N{len(pool)}_BS{batchsize}.pkl', 'wb') as fp:
             pickle.dump(results, fp)
 
     # global test_results
