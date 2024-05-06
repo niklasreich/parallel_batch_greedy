@@ -238,7 +238,7 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
             max_errs_pp.append(max_err)
             if max_err>0.1*rtol: break
 
-        surrogate.rom = surrogate.reductor.reduce(N_pp+1)
+        surrogate.rom_pp = surrogate.reductor.reduce(N_pp+1)
         logger.info(f'Size of reduced basis cut from {N_start} to {N_pp+1}')
 
 
@@ -344,6 +344,7 @@ def rb_batch_greedy(fom, reductor, training_set, use_error_estimator=True, error
     result = weak_batch_greedy(surrogate, training_set, atol=atol, rtol=rtol, max_extensions=max_extensions, pool=pool,
                                batchsize=batchsize, greedy_start=greedy_start, postprocessing=postprocessing)
     result['rom'] = surrogate.rom
+    result['rom_pp'] = surrogate.rom_pp
     result['greedytimes'] = surrogate.times
 
     return result
