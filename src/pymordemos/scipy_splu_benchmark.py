@@ -6,141 +6,83 @@
 import sys
 import time
 import pickle
+import numpy as np
+import scipy.sparse as sp
 from datetime import datetime
 
 from typer import Argument, Option, run
 
-from pymor.algorithms.error import plot_reduction_error_analysis, reduction_error_analysis, plot_batch_reduction
-from pymor.core.pickle import dump
-from pymor.parallel.default import new_parallel_pool, dummy_pool
-from pymor.tools.typer import Choices
-from pymor.algorithms.batchgreedy import rb_batch_greedy
+import scikits.umfpack as um
+
+umfpack = um.UmfpackContext()
+umfpack.control[um.UMFPACK_PRL] = 4 # Let's be more verbose.
+
+
+# from pymor.algorithms.error import plot_reduction_error_analysis, reduction_error_analysis, plot_batch_reduction
+# from pymor.core.pickle import dump
+# from pymor.parallel.default import new_parallel_pool, dummy_pool
+# from pymor.tools.typer import Choices
+# from pymor.algorithms.batchgreedy import rb_batch_greedy
 
 # python -m thermalblock 3 2 5 100 5 --alg batch_greedy --plot-batch-comparison
 
 
 def main(
-    xblocks: int = Argument(..., help='Number of blocks in x direction.'),
-    yblocks: int = Argument(..., help='Number of blocks in y direction.'),
-    snapshots: int = Argument(
-        ...,
-        help='naive: ignored\n\n'
-             'greedy/pod: Number of training_set parameters per block '
-             '(in total SNAPSHOTS^(XBLOCKS * YBLOCKS) parameters).\n\n'
-             'adaptive_greedy: size of validation set.\n\n'
-    ),
-    batchsize: int = Argument(..., help='Size of the (parallel) batch in each greedy iteration.')
+    num_tests: int = Option(20, help='Number of splu tests')
 ):
-    """Thermalblock demo."""
+    """scipy splu benchmark."""
 
+    n = 1000000 
+    nnz = int(np.max((9994005/(2002001**2)*(n**2),1.05*n)))
 
-    pool = new_parallel_pool(allow_mpi=True)
-    if pool is not dummy_pool:
-        print(f'Using pool of {len(pool)} workers for parallelization.')
-    else:
-        print(f'No functional pool. Only dummy_pool is used.')
+    tic  = time.perf_counter()
 
-    assert batchsize>=0, 'Batch size must be nonnegative.'
-    if batchsize==0: batchsize = len(pool)
+    rhs = np.random.rand(n)
 
-    grid = 1000
-    rb_size = 300
-    rtol = 1e-5
-    test_snapshots = 100
+    for test in range(num_tests):
 
-    tic = time.perf_counter()
+        data = np.concatenate((np.ones(n),np.random.rand(nnz-n)*1.1-0.1))
+        row = np.concatenate((range(n),np.random.randint(0,n-1,nnz-n)))
+        col = np.concatenate((range(n),np.random.randint(0,n-1,nnz-n)))
+        matrix = sp.coo_matrix((data, (row, col)), shape=(n, n))
+        matrix = sp.csc_matrix(matrix)
 
-    fom, fom_summary = discretize_pymor(xblocks, yblocks, grid, use_list_vector_array=False)
+        tic  = time.perf_counter()
 
-    parameter_space = fom.parameters.space(0.1, 1.)
+        factorization = um.splu(matrix)
+        sol_u = factorization.solve(rhs)
 
-    fom.enable_caching('memory')
+        toc  = time.perf_counter()
+        
+        print(f'Elapsed time for umfpack: {toc-tic}')
 
-    print('')
-    print('')
-    print('RB generation for batch size ' + str(batchsize) + ' ...')
+        tic  = time.perf_counter()
 
-    # define estimator for coercivity constant
-    from pymor.parameters.functionals import ExpressionParameterFunctional
-    coercivity_estimator = ExpressionParameterFunctional('min(diffusion)', fom.parameters)
+        factorization = sp.linalg.splu(matrix)
+        sol_s = factorization.solve(rhs)
 
-    # inner product for computation of Riesz representatives
-    product = fom.h1_0_semi_product
+        toc  = time.perf_counter()
 
-    reductor_str = 'traditional'
-    if reductor_str == 'residual_basis':
-        from pymor.reductors.coercive import CoerciveRBReductor
-        reductor = CoerciveRBReductor(fom, product=product, coercivity_estimator=coercivity_estimator,
-                                        check_orthonormality=False)
-    elif reductor_str == 'traditional':
-        from pymor.reductors.coercive import SimpleCoerciveRBReductor
-        reductor = SimpleCoerciveRBReductor(fom, product=product, coercivity_estimator=coercivity_estimator,
-                                            check_orthonormality=False)
-    else:
-        assert False  # this should never happen
-    
-    training_set = parameter_space.sample_uniformly(snapshots)
-    greedy_data = rb_batch_greedy(fom, reductor, training_set,
-                                  use_error_estimator=True,
-                                  error_norm=fom.h1_0_semi_norm,
-                                  max_extensions=rb_size,
-                                  pool=pool,
-                                  batchsize=batchsize,
-                                  rtol=rtol,
-                                  postprocessing=True,
-                                  # greedy_start='single_zero'
-                                  )
+        print(f'Elapsed time for SuperLU: {toc-tic}')
 
-    toc = time.perf_counter()
-    offline_time = toc - tic
+        print(f'Difference: {np.linalg.norm(sol_u - sol_s)}')
 
-    rom = greedy_data['rom']
-    rom_pp = greedy_data['rom_pp']
-    
-    test_sample = parameter_space.sample_randomly(test_snapshots)
-    results = reduction_error_analysis(rom,
-                                       fom=fom,
-                                       reductor=reductor,
-                                       error_estimator=True,
-                                       error_norms=(fom.h1_0_semi_norm, fom.l2_norm),
-                                       error_estimator_norm_index=0,
-                                       test_mus=test_sample,
-                                       basis_sizes=0,
-                                       pool=None
-                                       )
+        # timings = np.zeros(n_times)
 
-    # Online time
-    n_online = 500
-    tic = time.perf_counter()
-    for mu in parameter_space.sample_randomly(n_online):
-        reductor.reconstruct(rom.solve(mu))
-    toc = time.perf_counter()
-    online_time = (toc - tic)/n_online
+        # fom, fom_summary = discretize_pymor(xblocks, yblocks, grid, use_list_vector_array=False)
 
-    tic = time.perf_counter()
-    for mu in parameter_space.sample_randomly(n_online):
-        reductor.reconstruct(rom_pp.solve(mu))
-    toc = time.perf_counter()
-    online_time_pp = (toc - tic)/n_online
-    
-    results['num_extensions'] = greedy_data['extensions']
-    results['num_iterations'] = greedy_data['iterations']
-    results['max_errs_pp'] = greedy_data['max_errs_pp']
+        # parameter_space = fom.parameters.space(0.1, 1.)
 
-    results['timings'] = greedy_data['greedytimes'] 
-    results['timings']['online'] = online_time  # Specify what time is saved
-    results['timings']['online_pp'] = online_time_pp  # Specify what time is saved
-    results.pop('time', None)  # Delete old key
-    results['timings']['offline_pp'] = offline_time # Also save offline time
-    results['timings']['offline'] = offline_time - results['timings']['postprocess']# Also save offline time
+        # for j in range(n_times):
+        #     mu = parameter_space.sample_randomly()
+        #     tic  = time.perf_counter()
+        #     sol = fom.solve(mu)
+        #     toc = time.perf_counter()
+        #     timings[j] = toc - tic
 
-    results['settings'] = {'grid': grid, 'rb_size': rb_size, 'rtol': rtol, 'test_snapshots': test_snapshots, 'n_online': n_online}
+        # with open(f'fomsolves_OMP{omp_threads}_grid{grid}.pkl', 'wb') as fp:
+        #         pickle.dump(timings, fp)
 
-    with open(f'thermalblock_{xblocks}x{yblocks}_N{len(pool)}_BS{batchsize}.pkl', 'wb') as fp:
-            pickle.dump(results, fp)
-
-    # global test_results
-    # test_results = results
 
 
 def discretize_pymor(xblocks, yblocks, grid_num_intervals, use_list_vector_array):

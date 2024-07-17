@@ -7,6 +7,8 @@ import numpy as np
 from scipy.linalg import solve, solve_continuous_lyapunov, solve_discrete_lyapunov, solve_continuous_are
 from scipy.sparse.linalg import bicgstab, spsolve, splu, spilu, lgmres, lsqr, LinearOperator
 
+import scikits.umfpack as um
+
 from pymor.algorithms.lyapunov import _solve_lyap_lrcf_check_args, _solve_lyap_dense_check_args, _chol
 from pymor.algorithms.riccati import _solve_ricc_check_args, _solve_ricc_dense_check_args
 from pymor.algorithms.genericsolvers import _parse_options
@@ -234,8 +236,9 @@ def apply_inverse(op, V, initial_guess=None, options=None, least_squares=False, 
             elif options['keep_factorization']:
                 # the matrix is always converted to the promoted type.
                 # if matrix.dtype == promoted_type, this is a no_op
-                matrix.factorization = splu(matrix_astype_nocopy(matrix.tocsc(), promoted_type),
-                                            permc_spec=options['permc_spec'])
+                # matrix.factorization = splu(matrix_astype_nocopy(matrix.tocsc(), promoted_type),
+                #                             permc_spec=options['permc_spec'])
+                matrix.factorization = um.splu(matrix_astype_nocopy(matrix.tocsc(), promoted_type))
                 matrix.factorizationdtype = promoted_type
                 R = matrix.factorization.solve(V.T).T
             else:
