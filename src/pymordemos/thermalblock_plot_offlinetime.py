@@ -4,10 +4,10 @@ import matplotlib.pyplot as plt
 from os.path import isfile
 
 
-max_batchsize = 12
-max_P = 12
+max_batchsize = 30
+max_P = 30
 
-p_opt = 7
+p_opt = 30
 
 t_evaluate = []
 t_extend = []
@@ -44,7 +44,7 @@ for p in range(1, max_P+1):
 
     for bs in range(1, max_batchsize+1):
 
-        file_string = f'src/pymordemos/thermalblock_2x2_N{p}_BS{bs}.pkl'
+        file_string = f'src/pymordemos/thermalblock_3x2_N{p}_BS{bs}.pkl'
 
         if isfile(file_string):
             with open(file_string, 'rb') as f:
@@ -127,7 +127,7 @@ for title, time in t_parallel_b.items():
     p = ax[0,1].bar(batchsizes_str_p, time, width, label=title, bottom=bottom)
     bottom += time
 
-bottom = np.zeros(len(batchsizes_str_p))
+bottom = np.zeros(len(batchsizes_str_po))
 for title, time in t_parallel_opt.items():
     p = ax[1,0].bar(batchsizes_str_po, time, width, label=title, bottom=bottom)
     bottom += time
@@ -158,9 +158,9 @@ _ , ymax0 = ax[0,0].get_ylim()
 _ , ymax1 = ax[0,1].get_ylim()
 _ , ymax2 = ax[1,0].get_ylim()
 ymax = max(ymax0,ymax1,ymax2)
-ax[0,0].set_ylim(0,ymax)
-ax[0,1].set_ylim(0,ymax)
-ax[1,0].set_ylim(0,ymax)
-ax[1,1].set_ylim(0,ymax)
+# ax[0,0].set_ylim(0,ymax)
+# ax[0,1].set_ylim(0,ymax)
+# ax[1,0].set_ylim(0,ymax)
+# ax[1,1].set_ylim(0,ymax)
 
 plt.show()
