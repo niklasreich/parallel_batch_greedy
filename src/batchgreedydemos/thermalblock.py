@@ -32,7 +32,7 @@ def main(
 ):
     """Thermalblock demo for the parallel batch greedy algorithm."""
 
-
+    
     pool = new_parallel_pool(allow_mpi=True)
     if pool is not dummy_pool:
         print(f'Using pool of {len(pool)} workers for parallelization.')

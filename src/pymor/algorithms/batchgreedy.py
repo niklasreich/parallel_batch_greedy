@@ -13,8 +13,8 @@ from pymor.core.logger import getLogger
 from pymor.parallel.dummy import dummy_pool
 from pymor.parallel.interface import RemoteObject
 from pymor.parallel.manager import RemoteObjectManager
-from pymor.parallel.mpi import MPIPool
-from mpi4py import MPI
+# from pymor.parallel.mpi import MPIPool
+# from mpi4py import MPI
 
 
 def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensions=None, pool=None,
