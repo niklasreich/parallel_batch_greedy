@@ -1,14 +1,19 @@
 # This file is part of the pyMOR project (https://www.pymor.org).
 # Copyright pyMOR developers and contributors. All rights reserved.
 # License: BSD 2-Clause License (https://opensource.org/licenses/BSD-2-Clause)
+# Adapted by Niklas Reich
 
 
 import numpy as np
 from scipy.linalg import solve, solve_continuous_lyapunov, solve_discrete_lyapunov, solve_continuous_are
-from scipy.sparse.linalg import bicgstab, spsolve, splu, spilu, lgmres, lsqr, LinearOperator
+from scipy.sparse.linalg import bicgstab, spsolve, spilu, lgmres, lsqr, LinearOperator
 
-# Uncomment if you want to use UMFPACK-based splu
-# import scikits.umfpack as um
+use_umfpack = False
+try:
+    from scikits.umfpack import splu
+    use_umfpack = True
+except:
+    from scipy.sparse.linalg import splu
 
 from pymor.algorithms.lyapunov import _solve_lyap_lrcf_check_args, _solve_lyap_dense_check_args, _chol
 from pymor.algorithms.riccati import _solve_ricc_check_args, _solve_ricc_dense_check_args
@@ -237,12 +242,11 @@ def apply_inverse(op, V, initial_guess=None, options=None, least_squares=False, 
             elif options['keep_factorization']:
                 # the matrix is always converted to the promoted type.
                 # if matrix.dtype == promoted_type, this is a no_op
-                if "um" not in dir():
+                if use_umfpack:
+                    matrix.factorization = splu(matrix_astype_nocopy(matrix.tocsc(), promoted_type))
+                else:
                     matrix.factorization = splu(matrix_astype_nocopy(matrix.tocsc(), promoted_type),
                                                 permc_spec=options['permc_spec'])
-                else:
-                # Use UMFPACK if imported
-                    matrix.factorization = um.splu(matrix_astype_nocopy(matrix.tocsc(), promoted_type))
                 matrix.factorizationdtype = promoted_type
                 R = matrix.factorization.solve(V.T).T
             else:
