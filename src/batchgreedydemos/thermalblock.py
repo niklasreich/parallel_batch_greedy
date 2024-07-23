@@ -1,4 +1,3 @@
-"""Thermalblock script for the parallel batch greedy algorithm."""
 #!/usr/bin/env python
 # This file is part of the pyMOR project (https://www.pymor.org).
 # Copyright pyMOR developers and contributors. All rights reserved.
@@ -6,13 +5,15 @@
 # This file was adapted by Niklas Reich.
 
 import time
-import pickle
 
 from typer import Argument, run
 
-from pymor.algorithms.error import reduction_error_analysis
-from pymor.parallel.default import new_parallel_pool, dummy_pool
 from pymor.algorithms.batchgreedy import rb_batch_greedy
+from pymor.algorithms.error import reduction_error_analysis
+from pymor.analyticalproblems.thermalblock import thermal_block_problem
+from pymor.discretizers.builtin import discretize_stationary_cg
+from pymor.discretizers.builtin.list import convert_to_numpy_list_vector_array
+from pymor.parallel.default import new_parallel_pool, dummy_pool
 from pymor.parameters.functionals import ExpressionParameterFunctional
 from pymor.reductors.coercive import SimpleCoerciveRBReductor
 
@@ -77,15 +78,13 @@ def main(
                                   max_extensions=rb_size,
                                   pool=pool,
                                   batchsize=batchsize,
-                                  rtol=rtol,
-                                  postprocessing=True
+                                  rtol=rtol
                                   )
 
     toc = time.perf_counter()
     offline_time = toc - tic
 
     rom = greedy_data['rom']
-    rom_pp = greedy_data['rom_pp']
 
     test_sample = parameter_space.sample_randomly(test_snapshots)
     results = reduction_error_analysis(rom,
@@ -118,17 +117,10 @@ def main(
 
     results['settings'] = {'grid': grid, 'rb_size': rb_size, 'rtol': rtol, 'test_snapshots': test_snapshots, 'n_online': test_online}
 
-    with open(f'thermalblock_{xblocks}x{yblocks}_N{len(pool)}_BS{batchsize}.pkl', 'wb') as fp:
-            pickle.dump(results, fp)
 
-    # global test_results
-    # test_results = results
 
 
 def discretize_pymor(xblocks, yblocks, grid_num_intervals, use_list_vector_array):
-    from pymor.analyticalproblems.thermalblock import thermal_block_problem
-    from pymor.discretizers.builtin import discretize_stationary_cg
-    from pymor.discretizers.builtin.list import convert_to_numpy_list_vector_array
 
     print('Discretize ...')
     # setup analytical problem
@@ -147,69 +139,6 @@ def discretize_pymor(xblocks, yblocks, grid_num_intervals, use_list_vector_array
 '''
 
     return fom, summary
-
-
-def discretize_fenics(xblocks, yblocks, grid_num_intervals, element_order):
-    from pymor.tools import mpi
-
-    if mpi.parallel:
-        from pymor.models.mpi import mpi_wrap_model
-        fom = mpi_wrap_model(lambda: _discretize_fenics(xblocks, yblocks, grid_num_intervals, element_order),
-                             use_with=True, pickle_local_spaces=False)
-    else:
-        fom = _discretize_fenics(xblocks, yblocks, grid_num_intervals, element_order)
-
-    summary = f'''FEniCS model:
-   number of blocks:      {xblocks}x{yblocks}
-   grid intervals:        {grid_num_intervals}
-   finite element order:  {element_order}
-'''
-
-    return fom, summary
-
-
-def _discretize_fenics(xblocks, yblocks, grid_num_intervals, element_order):
-
-    from pymor.analyticalproblems.thermalblock import thermal_block_problem
-    from pymor.discretizers.fenics import discretize_stationary_cg
-
-    print('Discretize ...')
-    # setup analytical problem
-    problem = thermal_block_problem(num_blocks=(xblocks, yblocks))
-
-    # discretize using continuous finite elements
-    fom, _ = discretize_stationary_cg(problem, diameter=1. / grid_num_intervals, degree=element_order)
-
-    return fom
-
-
-def reduce_batch_greedy(fom, reductor, parameter_space, snapshots_per_block,
-                        extension_alg_name, max_extensions, use_error_estimator, pool,
-                        batchsize, greedy_start, atol, parallel_batch):
-
-    from pymor.algorithms.batchgreedy import rb_batch_greedy
-
-    # run greedy
-    training_set = parameter_space.sample_uniformly(snapshots_per_block)
-    greedy_data = rb_batch_greedy(fom, reductor, training_set,
-                                  use_error_estimator=use_error_estimator, error_norm=fom.h1_0_semi_norm,
-                                  extension_params={'method': extension_alg_name}, max_extensions=max_extensions,
-                                  pool=pool, batchsize=batchsize, greedy_start=greedy_start, atol=atol, parallel_batch=parallel_batch)
-    rom = greedy_data['rom']
-
-    # generate summary
-    real_rb_size = rom.solution_space.dim
-    training_set_size = len(training_set)
-    summary = f'''Greedy basis generation:
-   size of training set:   {training_set_size}
-   error estimator used:   {use_error_estimator}
-   extension method:       {extension_alg_name}
-   prescribed basis size:  {max_extensions}
-   actual basis size:      {real_rb_size}
-   elapsed time:           {greedy_data["time"]}
-'''
-
-    return rom, summary, greedy_data
 
 
 if __name__ == '__main__':
