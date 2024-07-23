@@ -86,6 +86,7 @@ def main(
 
     rom = greedy_data['rom']
 
+    print('\nA posteriori error analysis:')
     test_sample = parameter_space.sample_randomly(test_snapshots)
     results = reduction_error_analysis(rom,
                                        fom=fom,
@@ -97,6 +98,7 @@ def main(
                                        basis_sizes=0,
                                        pool=None
                                        )
+    print('')
 
     # Online time
     tic = time.perf_counter()
@@ -105,16 +107,15 @@ def main(
     toc = time.perf_counter()
     online_time = (toc - tic)/test_online
 
+    # Saving everything necessary in 'results'
     results['num_extensions'] = greedy_data['extensions']
     results['num_iterations'] = greedy_data['iterations']
-    results['max_errs_pp'] = greedy_data['max_errs_pp']
+    results['max_errs_ext'] = greedy_data['max_errs_ext']
 
     results['timings'] = greedy_data['greedytimes']
     results['timings']['online'] = online_time  # Specify what time is saved
     results.pop('time', None)  # Delete old key
-    results['timings']['offline_pp'] = offline_time # Also save offline time
-    results['timings']['offline'] = (offline_time
-                                     - results['timings']['postprocess']) # Also save offline time
+    results['timings']['offline'] = offline_time # Also save offline time
 
     results['settings'] = {'grid': grid, 'rb_size': rb_size, 'rtol': rtol,
                            'test_snapshots': test_snapshots, 'n_online': test_online}

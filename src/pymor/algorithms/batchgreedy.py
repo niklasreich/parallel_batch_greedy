@@ -152,18 +152,14 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
             stopped = True
             break
 
-    tic_pp = time.perf_counter()
-    max_errs_pp = []
-
     toc = time.perf_counter()
     logger.info(f'Greedy search took {toc - tic} seconds')
     timings = surrogate.times
-    timings['postprocess'] = toc - tic_pp
     timings['greedy'] = toc - tic
     return {'max_errs_iter': max_errs_iter, 'max_err_mus_iter': max_err_mus_iter,
             'max_errs_ext': max_errs_ext, 'max_err_mus_ext': max_err_mus_ext,
             'extensions': extensions, 'iterations': iterations,
-            'timings': timings, 'max_errs_pp': max_errs_pp}
+            'timings': timings}
 
 
 class WeakGreedySurrogate(BasicObject):
