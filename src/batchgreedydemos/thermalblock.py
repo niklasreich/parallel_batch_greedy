@@ -1,21 +1,20 @@
+"""Thermalblock script for the parallel batch greedy algorithm."""
 #!/usr/bin/env python
 # This file is part of the pyMOR project (https://www.pymor.org).
 # Copyright pyMOR developers and contributors. All rights reserved.
 # License: BSD 2-Clause License (https://opensource.org/licenses/BSD-2-Clause)
 # This file was adapted by Niklas Reich.
 
-import sys
 import time
 import pickle
-from datetime import datetime
 
-from typer import Argument, Option, run
+from typer import Argument, run
 
-from pymor.algorithms.error import plot_reduction_error_analysis, reduction_error_analysis, plot_batch_reduction
-from pymor.core.pickle import dump
+from pymor.algorithms.error import reduction_error_analysis
 from pymor.parallel.default import new_parallel_pool, dummy_pool
-from pymor.tools.typer import Choices
 from pymor.algorithms.batchgreedy import rb_batch_greedy
+from pymor.parameters.functionals import ExpressionParameterFunctional
+from pymor.reductors.coercive import SimpleCoerciveRBReductor
 
 
 def main(
@@ -23,63 +22,55 @@ def main(
     yblocks: int = Argument(..., help='Number of blocks in y direction.'),
     snapshots: int = Argument(
         ...,
-        help='naive: ignored\n\n'
-             'greedy/pod: Number of training_set parameters per block '
-             '(in total SNAPSHOTS^(XBLOCKS * YBLOCKS) parameters).\n\n'
-             'adaptive_greedy: size of validation set.\n\n'
+        help='Number of training_set parameters per block\n\n'
     ),
     batchsize: int = Argument(..., help='Size of the (parallel) batch in each greedy iteration.')
 ):
-    """Thermalblock demo for the parallel batch greedy algorithm."""
+    """Thermalblock script for the parallel batch greedy algorithm."""
 
-    
+    assert batchsize>=1, 'Batch size must be a positiv integer.'
+
+    # Create a worker pool for parallel computing.
+    # Without MPI a dummy pool is created which conincides with serial computation.
     pool = new_parallel_pool(allow_mpi=True)
     if pool is not dummy_pool:
         print(f'Using pool of {len(pool)} workers for parallelization.')
     else:
-        print(f'No functional pool. Only dummy_pool is used.')
+        print('No functional pool. Only dummy_pool is used.')
 
-    assert batchsize>=0, 'Batch size must be nonnegative.'
-    if batchsize==0: batchsize = len(pool)
-
-    # static parameters
-    grid = 100
-    rb_size = 350
-    rtol = 1e-5
-    test_snapshots = 100
-    reductor_str = 'traditional'
+    # Static Parameters
+    # (Remain unchanged)
+    grid = 100 # approx. number of nodes per dim.
+    rtol = 1e-5 # rel tolerance for the greedy algorithm.
+    rb_size = 500 # max. basis size. Chosen so big that we stop by rtol.
+    test_snapshots = 100 # number of random parameters for error analysis
+    test_online = 500 # number of random paramters for benchmarking reduced model.
 
     tic = time.perf_counter()
 
-    fom, fom_summary = discretize_pymor(xblocks, yblocks, grid, use_list_vector_array=False)
-
-    parameter_space = fom.parameters.space(0.1, 1.)
-
-    fom.enable_caching('memory')
+    fom, _ = discretize_pymor(xblocks, yblocks, grid, use_list_vector_array=False)
+    parameter_space = fom.parameters.space(0.1, 1.) # Parameter domain
+    fom.enable_caching('memory') # Allow caching.
 
     print('')
     print('')
     print('RB generation for batch size ' + str(batchsize) + ' ...')
 
     # define estimator for coercivity constant
-    from pymor.parameters.functionals import ExpressionParameterFunctional
     coercivity_estimator = ExpressionParameterFunctional('min(diffusion)', fom.parameters)
 
     # inner product for computation of Riesz representatives
     product = fom.h1_0_semi_product
 
-    if reductor_str == 'residual_basis':
-        from pymor.reductors.coercive import CoerciveRBReductor
-        reductor = CoerciveRBReductor(fom, product=product, coercivity_estimator=coercivity_estimator,
-                                        check_orthonormality=False)
-    elif reductor_str == 'traditional':
-        from pymor.reductors.coercive import SimpleCoerciveRBReductor
-        reductor = SimpleCoerciveRBReductor(fom, product=product, coercivity_estimator=coercivity_estimator,
-                                            check_orthonormality=False)
-    else:
-        assert False  # this should never happen
-    
+    # choice of error estimator
+    reductor = SimpleCoerciveRBReductor(fom,
+                                        product=product,
+                                        coercivity_estimator=coercivity_estimator,
+                                        check_orthonormality=False
+                                        )
+
     training_set = parameter_space.sample_uniformly(snapshots)
+
     greedy_data = rb_batch_greedy(fom, reductor, training_set,
                                   use_error_estimator=True,
                                   error_norm=fom.h1_0_semi_norm,
@@ -95,7 +86,7 @@ def main(
 
     rom = greedy_data['rom']
     rom_pp = greedy_data['rom_pp']
-    
+
     test_sample = parameter_space.sample_randomly(test_snapshots)
     results = reduction_error_analysis(rom,
                                        fom=fom,
@@ -109,31 +100,23 @@ def main(
                                        )
 
     # Online time
-    n_online = 500
     tic = time.perf_counter()
-    for mu in parameter_space.sample_randomly(n_online):
+    for mu in parameter_space.sample_randomly(test_online):
         reductor.reconstruct(rom.solve(mu))
     toc = time.perf_counter()
-    online_time = (toc - tic)/n_online
+    online_time = (toc - tic)/test_online
 
-    tic = time.perf_counter()
-    for mu in parameter_space.sample_randomly(n_online):
-        reductor.reconstruct(rom_pp.solve(mu))
-    toc = time.perf_counter()
-    online_time_pp = (toc - tic)/n_online
-    
     results['num_extensions'] = greedy_data['extensions']
     results['num_iterations'] = greedy_data['iterations']
     results['max_errs_pp'] = greedy_data['max_errs_pp']
 
     results['timings'] = greedy_data['greedytimes'] 
     results['timings']['online'] = online_time  # Specify what time is saved
-    results['timings']['online_pp'] = online_time_pp  # Specify what time is saved
     results.pop('time', None)  # Delete old key
     results['timings']['offline_pp'] = offline_time # Also save offline time
     results['timings']['offline'] = offline_time - results['timings']['postprocess']# Also save offline time
 
-    results['settings'] = {'grid': grid, 'rb_size': rb_size, 'rtol': rtol, 'test_snapshots': test_snapshots, 'n_online': n_online}
+    results['settings'] = {'grid': grid, 'rb_size': rb_size, 'rtol': rtol, 'test_snapshots': test_snapshots, 'n_online': test_online}
 
     with open(f'thermalblock_{xblocks}x{yblocks}_N{len(pool)}_BS{batchsize}.pkl', 'wb') as fp:
             pickle.dump(results, fp)
