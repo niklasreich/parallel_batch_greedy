@@ -125,26 +125,22 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
 
         stopped = True
         if parallel_batch:
-            with logger.block(f'Extending in parallel...'):
+            with logger.block('Extending in parallel...'):
                 try:
                     extensions += surrogate.extend(this_i_mus)
                     stopped = False
                 except ExtensionError:
                     pass
         else:
-            for i in range(len(this_i_mus)):
-                with logger.block(f'Extending surrogate for mu = {this_i_mus[i]} ...'):
+            for _, mu in enumerate(this_i_mus):
+                with logger.block(f'Extending surrogate for mu = {mu} ...'):
                     try:
-                        # if i==batchsize-1:
-                        #     surrogate.extension_params['orthogonalize'] = True
-                        # else:
-                        #     surrogate.extension_params['orthogonalize'] = False
-                        surrogate.extend(this_i_mus[i])
-                        appended_mus.append(this_i_mus[i])
+                        surrogate.extend(mu)
+                        appended_mus.append(mu)
                         stopped = False
                     except ExtensionError:
-                        logger.info('This extension failed. Still trying other extensions from the batch.')
-                        # stopped = True
+                        logger.info('This extension failed. '
+                                    'Still trying other extensions from the batch.')
                         break
                     extensions += 1
         iterations += 1
@@ -255,9 +251,11 @@ def rb_batch_greedy(fom, reductor, training_set, use_error_estimator=True, error
         :extensions:             Number of performed basis extensions.
         :time:                   Total runtime of the algorithm.
     """
-    surrogate = RBSurrogate(fom, reductor, use_error_estimator, error_norm, extension_params, pool or dummy_pool)
+    surrogate = RBSurrogate(fom, reductor, use_error_estimator, error_norm,
+                            extension_params, pool or dummy_pool)
 
-    result = weak_batch_greedy(surrogate, training_set, atol=atol, rtol=rtol, max_extensions=max_extensions, pool=pool,
+    result = weak_batch_greedy(surrogate, training_set, atol=atol, rtol=rtol,
+                               max_extensions=max_extensions, pool=pool,
                                batchsize=batchsize)
     result['rom'] = surrogate.rom
     result['greedytimes'] = surrogate.times
@@ -362,7 +360,7 @@ def _rb_surrogate_evaluate(rom=None, fom=None, reductor=None, mus=None, error_no
             return []
         else:
             return -1., None
-        
+
     if fom is None:
         use_error_estimator = True
 

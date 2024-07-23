@@ -109,13 +109,15 @@ def main(
     results['num_iterations'] = greedy_data['iterations']
     results['max_errs_pp'] = greedy_data['max_errs_pp']
 
-    results['timings'] = greedy_data['greedytimes'] 
+    results['timings'] = greedy_data['greedytimes']
     results['timings']['online'] = online_time  # Specify what time is saved
     results.pop('time', None)  # Delete old key
     results['timings']['offline_pp'] = offline_time # Also save offline time
-    results['timings']['offline'] = offline_time - results['timings']['postprocess']# Also save offline time
+    results['timings']['offline'] = (offline_time
+                                     - results['timings']['postprocess']) # Also save offline time
 
-    results['settings'] = {'grid': grid, 'rb_size': rb_size, 'rtol': rtol, 'test_snapshots': test_snapshots, 'n_online': test_online}
+    results['settings'] = {'grid': grid, 'rb_size': rb_size, 'rtol': rtol,
+                           'test_snapshots': test_snapshots, 'n_online': test_online}
 
 
 
