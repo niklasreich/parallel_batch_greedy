@@ -41,7 +41,7 @@ def main(
 
     # Static Parameters
     # (Remain unchanged)
-    grid = 100 # approx. number of nodes per dim.
+    grid = 1000 # approx. number of nodes per dim.
     rtol = 1e-5 # rel tolerance for the greedy algorithm.
     rb_size = 500 # max. basis size. Chosen so big that we stop by rtol.
     test_snapshots = 100 # number of random parameters for error analysis
@@ -111,16 +111,91 @@ def main(
     results['num_extensions'] = greedy_data['extensions']
     results['num_iterations'] = greedy_data['iterations']
     results['max_errs_ext'] = greedy_data['max_errs_ext']
-
-    results['timings'] = greedy_data['greedytimes']
-    results['timings']['online'] = online_time  # Specify what time is saved
-    results.pop('time', None)  # Delete old key
-    results['timings']['offline'] = offline_time # Also save offline time
-
+    results['times'] = greedy_data['greedytimes']
+    results['times']['online'] = online_time
+    results.pop('time', None)
+    results['times']['offline'] = offline_time
+    results['times']['other'] = (offline_time
+                                 - results['times']['solve']
+                                 - results['times']['evaluate']
+                                 - results['times']['extend']
+                                 - results['times']['reduce'])
     results['settings'] = {'grid': grid, 'rb_size': rb_size, 'rtol': rtol,
                            'test_snapshots': test_snapshots, 'n_online': test_online}
 
-
+    # print a summary
+    print(
+        "\n" + "\033[1m"+"Summary:"+"\033[0m\n"
+        "\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501"
+        "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501"
+        "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501"
+        "\u2501\u2501\u2501\u2501\n"
+        "\u2523\u2501 Configuration:\n"
+        "\u2503  \u251c\u2500 " # indentation
+        "Thermalblock:\n"
+        "\u2503  \u2502  \u251c\u2500 " # indentation
+        f"Blocks: {xblocks} by {yblocks}\n"
+        "\u2503  \u2502  \u251c\u2500 " # indentation
+        f"Values per block: {snapshots}\n"
+        "\u2503  \u2502  \u251c\u2500 " # indentation
+        f"Size of training set: {snapshots**(xblocks*yblocks)}\n"
+        "\u2503  \u2502  \u2514\u2500 " # indentation
+        f"Degrees of freedom: {fom.order}\n"
+        "\u2503  \u251c\u2500 " # indentation
+        "Batch greedy algorithm:\n"
+        "\u2503  \u2502  \u251c\u2500 " # indentation
+        f"Batchsize: {batchsize}\n"
+        "\u2503  \u2502  \u2514\u2500 " # indentation
+        f"Rel. target tolerance: {rtol}\n"
+        "\u2503  \u251c\u2500 " # indentation
+        "Size of test sets:\n"
+        "\u2503  \u2502  \u251c\u2500 " # indentation
+        f"Error analysis: {test_snapshots}\n"
+        "\u2503  \u2502  \u2514\u2500 " # indentation
+        f"Online benchmark: {test_online}\n"
+        "\u2503  \u2514\u2500 " # indentation
+        f"(MPI-)Pool: {len(pool)} parallel worker(s)\n"
+        "\u2523\u2501 Computation times:\n"
+        "\u2503  \u251c\u2500 " # indentation
+        f"Offline: {results['times']['offline']:.4e} sec.\n"
+        "\u2503  \u2502  \u251c\u2500 " # indentation
+        f"Solve:    {results['times']['solve']:.4e} sec. - "
+        f"{results['times']['solve']/results['times']['offline']*100:4.1f}%\n"
+        "\u2503  \u2502  \u251c\u2500 " # indentation
+        f"Evaluate: {results['times']['evaluate']:.4e} sec. - "
+        f"{results['times']['evaluate']/results['times']['offline']*100:4.1f}%\n"
+        "\u2503  \u2502  \u251c\u2500 " # indentation
+        f"Extend:   {results['times']['extend']:.4e} sec. - "
+        f"{results['times']['extend']/results['times']['offline']*100:4.1f}%\n"
+        "\u2503  \u2502  \u251c\u2500 " # indentation
+        f"Reduce:   {results['times']['reduce']:.4e} sec. - "
+        f"{results['times']['reduce']/results['times']['offline']*100:4.1f}%\n"
+        "\u2503  \u2502  \u2514\u2500 " # indentation
+        f"Other:    {results['times']['other']:.4e} sec. - "
+        f"{results['times']['other']/results['times']['offline']*100:4.1f}%\n"
+        "\u2503  \u2514\u2500 " # indentation
+        f"Online:  {results['times']['online']:.4e} sec. on average\n"
+        "\u2523\u2501 Reduced basis:\n"
+        "\u2503  \u251c\u2500 " # indentation
+        f"Final basis size:  {rom.order:4n}\n"
+        "\u2503  \u251c\u2500 " # indentation
+        f"Greedy iterations: {results['num_iterations']:4n}\n"
+        "\u2503  \u251c\u2500 " # indentation
+        "Relative error decay:\n"
+        "\u2503  \u2502       \u250a       rel. error\n"
+        "\u2503  \u2502     n \u250a (h1_0_semi_norm)\n"
+        "\u2503  \u2502  \u254c\u254c\u254c\u254c\u254c+"
+        "\u254c\u254c\u254c\u254c\u254c\u254c\u254c\u254c\u254c\u254c\u254c\u254c"
+        "\u254c\u254c\u254c\u254c\u254c\u254c"
+    )
+    for i in range(len(results['max_rel_errors'][0])):
+        print(f"\u2503  \u2502  {i:4n} \u250a       {results['max_rel_errors'][0][i]:.4e}")
+    print(
+        "\u253b\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501"
+        "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501"
+        "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501"
+        "\u2501\u2501\u2501\u2501\n\n"
+    )
 
 
 def discretize_pymor(xblocks, yblocks, grid_num_intervals, use_list_vector_array):
