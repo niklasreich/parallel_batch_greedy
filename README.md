@@ -48,7 +48,7 @@ If you have MPI installed you can leverage a parallel worker pool by executing
 
     mpiexec -n [numproc] python thermalblock.py [xblocks] [yblocks] [snapshots] [batchsize]
 
-where `numproc` is the number of workers.
+where `[numproc]` is the number of workers.
 
 To give a concrete example the results of the paper were created by executing
 
