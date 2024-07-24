@@ -59,7 +59,7 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
     if batchsize is None:
         batchsize = 1
 
-    logger = getLogger('pymor.algorithms.greedy.weak_greedy')
+    logger = getLogger('pymor.algorithms.batchgreedy.weak_batch_greedy')
     training_set = list(training_set)
     logger.info(f'Started batch greedy search on training set of size {len(training_set)}.')
 
