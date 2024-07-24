@@ -34,6 +34,27 @@ To use MPI with Python we need an interface from the mpi4py package that can be 
 #### SuiteSparse & scikit-umfpack
 [SuiteSparse](https://people.engr.tamu.edu/davis/suitesparse.html) is "a suite of sparse matrix algorithms". Among others, it includes *UMFPACK*, a multifrontal LU factorization. This implementation can be used instead of the standard implementation of `splu` by SciPy. How SuiteSparse & scikit-umfpack can be installed is described [here](https://scikit-umfpack.github.io/scikit-umfpack/install.html). If the software is installed correctly, the UMFPACK-implementation is used automatically.
 
-## Reproduction of Results
+## Start the Benchmark
 
-TODO
+The benchmark problem that is described in the paper is found within the file `src/batchgreedydemos/thermalblock.py`. Execute the code with
+
+    python thermalblock.py [xblocks] [yblocks] [snapshots] [batchsize]
+
+Here `[xblocks]` is the number of blocks in x direction, `[yblocks]` is the number of blocks in y direction, `[snapshots]` is the number of discrete values per block for the thermal conductivity and `[batchsize]` is the batchsize of the parallel greedy algorithm. By setting `[batchsize]` to `1` we get an classical weak greedy algorithm.
+
+When the code runs successfully it will put out a text-based summary in the end which sums up the used configuration as well as the results.
+
+If you have MPI installed you can leverage a parallel worker pool by executing
+
+    mpiexec -n [numproc] python thermalblock.py [xblocks] [yblocks] [snapshots] [batchsize]
+
+where `numproc` is the number of workers.
+
+To give a concrete example the results of the paper were created by executing
+
+    mpiexec -n 30 python thermalblock.py 2 2 25 [batchsize]
+<!-- tsk -->
+    mpiexec -n 30 python thermalblock.py 3 3 5 [batchsize]
+    
+
+and `[batchsize]` was set to `1`, ... , `16`.
