@@ -78,7 +78,7 @@ jobs:
           ./mesa/systemwidedeploy.cmd
 
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: conda-incubator/setup-miniconda@v2
         with:
           activate-environment: pyMOR-ci
@@ -177,7 +177,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs: [miniconda]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v3
         with:
           name: coverage_results_raw
@@ -205,7 +205,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs: [miniconda]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v3
         with:
           name: coverage_results
@@ -255,7 +255,7 @@ jobs:
           ./mesa/systemwidedeploy.cmd
 
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: conda-incubator/setup-miniconda@v2
         with:
           activate-environment: pyMOR-ci
