@@ -1,8 +1,7 @@
 # This file is part of the pyMOR project (https://www.pymor.org).
 # Copyright pyMOR developers and contributors. All rights reserved.
 # License: BSD 2-Clause License (https://opensource.org/licenses/BSD-2-Clause)
-# Adapted by Niklas Reich
-
+# This file was adapted by Niklas Reich
 
 import numpy as np
 from scipy.linalg import solve, solve_continuous_lyapunov, solve_discrete_lyapunov, solve_continuous_are
