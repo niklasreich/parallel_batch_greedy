@@ -6,7 +6,7 @@
 
 import time
 
-from typer import Argument, run
+from typer import Argument, Option, run
 
 from pymor.algorithms.batchgreedy import rb_batch_greedy
 from pymor.algorithms.error import reduction_error_analysis
@@ -25,7 +25,8 @@ def main(
         ...,
         help='Number of training_set parameters per block\n\n'
     ),
-    batchsize: int = Argument(..., help='Size of the (parallel) batch in each greedy iteration.')
+    batchsize: int = Argument(..., help='Size of the (parallel) batch in each greedy iteration.'),
+    test_config: bool = Option(False, help='Plot error')
 ):
     """Thermalblock script for the parallel batch greedy algorithm."""
 
@@ -41,12 +42,18 @@ def main(
 
     # Static Parameters
     # (Remain unchanged)
-    grid = 1000 # approx. number of nodes per dim.
-    rtol = 1e-5 # rel tolerance for the greedy algorithm.
-    rb_size = 500 # max. basis size. Chosen so big that we stop by rtol.
-    test_snapshots = 100 # number of random parameters for error analysis
-    test_online = 500 # number of random paramters for benchmarking reduced model.
-
+    if test_config: # Small problem to test if code runs
+        grid = 100 # approx. number of nodes per dim.
+        rtol = 1e-5 # rel tolerance for the greedy algorithm.
+        rb_size = 50 # max. basis size. Chosen so big that we stop by rtol.
+        test_snapshots = 10 # number of random parameters for error analysis
+        test_online = 50 # number of random paramters for benchmarking reduced model.
+    else: # Same configuration as in the paper
+        grid = 1000 # approx. number of nodes per dim.
+        rtol = 1e-5 # rel tolerance for the greedy algorithm.
+        rb_size = 500 # max. basis size. Chosen so big that we stop by rtol.
+        test_snapshots = 100 # number of random parameters for error analysis
+        test_online = 500 # number of random paramters for benchmarking reduced model.
     tic = time.perf_counter()
 
     fom, _ = discretize_pymor(xblocks, yblocks, grid, use_list_vector_array=False)

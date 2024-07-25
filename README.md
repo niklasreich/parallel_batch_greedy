@@ -36,7 +36,7 @@ To use MPI with Python we need an interface from the mpi4py package that can be 
 
 ## Start the Benchmark
 
-The benchmark problem that is described in the paper is found within the file `src/batchgreedydemos/thermalblock.py`. Execute the code with
+The benchmark problem that is described in the paper is found within the file `src/batchgreedydemos/thermalblock.py`. After navigating to the directory `src/batchgreedydemos/`, execute the code with
 
     python thermalblock.py [xblocks] [yblocks] [snapshots] [batchsize]
 
@@ -58,3 +58,19 @@ To give a concrete example the results of the paper were created by executing
     
 
 and `[batchsize]` was set to `1`, ... , `16`.
+
+### Smaller Test configuration
+
+If you just want to make sure that the code runs, you can use
+
+    python thermalblock.py [xblocks] [yblocks] [snapshots] [batchsize] --test-config
+
+This changes some otherwise static parameters, so that the benchmark finishes much faster.
+For example
+
+    python thermalblock.py 2 2 5 3 --test-config
+
+should finish in under a minute.
+
+Of course, when using the test configuration the results are not related to the results 
+presented in the paper.
