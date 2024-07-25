@@ -7,7 +7,7 @@ Niklas Reich, Karsten Urban, Jürgen Vorloeper, 2024.
 arXiv: https://arxiv.org/abs/2407.11631  
 doi: https://doi.org/10.48550/arXiv.2407.11631
 
-## Licence
+## License
 
 This code is build upon [pyMOR](https://pymor.org/) and therefore includes a full pyMOR distribution.
 
@@ -19,7 +19,7 @@ The authors of this repository created/adapted the follwoing files:
 
 See these files for more information.
 
-### pyMOR Licence
+### pyMOR License
 
 Copyright pyMOR developers and contributors. All rights reserved.
 
