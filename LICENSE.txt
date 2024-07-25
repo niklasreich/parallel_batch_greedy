@@ -1,4 +1,4 @@
-This code is build upon [pyMOR](https://pymor.org/) and therefore includes a full pyMOR distribution.
+This code is build upon pyMOR (https://pymor.org/) and therefore includes a full pyMOR distribution.
 
 The authors of this repository created/adapted the follwoing files:
 
