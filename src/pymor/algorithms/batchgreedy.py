@@ -1,4 +1,5 @@
-# This file is part of the pyMOR project (https://www.pymor.org).
+# This file was created by Niklas Reich
+# It is an adaption of src/pymor/algorithms/greedy.py
 # Copyright pyMOR developers and contributors. All rights reserved.
 # License: BSD 2-Clause License (https://opensource.org/licenses/BSD-2-Clause)
 
