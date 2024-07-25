@@ -1,8 +1,8 @@
 #!/usr/bin/env python
-# This file is part of the pyMOR project (https://www.pymor.org).
+# This file was created by Niklas Reich
+# It is an adaption of src/pymordemos/thermalblock.py
 # Copyright pyMOR developers and contributors. All rights reserved.
 # License: BSD 2-Clause License (https://opensource.org/licenses/BSD-2-Clause)
-# This file was adapted by Niklas Reich.
 
 import time
 
