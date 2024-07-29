@@ -16,13 +16,14 @@ from pymor.parallel.interface import RemoteObject
 
 def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensions=None, pool=None,
                       batchsize=None):
-    """Weak greedy basis generation algorithm :cite:`BCDDPW11`.
+    """Weak greedy basis generation algorithm with a batch logic.
 
     This algorithm generates an approximation basis for a given set of vectors
     associated with a training set of parameters by iteratively evaluating a
     :class:`surrogate <WeakGreedySurrogate>` for the approximation error on
     the training set and adding the worst approximated vector (according to
-    the surrogate) to the basis.
+    the surrogate) to the basis. Compared to the standard greedy algorithm a whole
+    batch of paramters are added to the basis in every greedy iteration.
 
     The constructed basis is extracted from the surrogate after termination
     of the algorithm.
@@ -46,17 +47,25 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
     pool
         If not `None`, a |WorkerPool| to use for parallelization. Parallelization
         needs to be supported by `surrogate`.
+    batchsize
+        Size of the batch that is used within the greedy algorithm.
 
     Returns
     -------
     Dict with the following fields:
 
-        :max_errs:               Sequence of maximum estimated errors during the greedy run.
-        :max_err_mus:            The parameters corresponding to `max_errs`.
+        :max_errs_iter:          Sequence of maximum estimated errors during the greedy run
+                                 per iteration.
+        :max_err_mus_iter:       The parameters corresponding to `max_errs` per iteration.
+        :max_errs_ext:           Sequence of maximum estimated errors during the greedy run
+                                 per extension.
+        :max_err_mus_ext:        The parameters corresponding to `max_errs` per extension.
         :extensions:             Number of performed basis extensions.
-        :time:                   Total runtime of the algorithm.
+        :iterations:             Number of greedy iterations.
+        :time:                   Splits of the runtime of the algorithm.
     """
 
+    # if no batchsize is given do classical greedy with batch size 1
     if batchsize is None:
         batchsize = 1
 
@@ -67,13 +76,13 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
     tic = time.perf_counter()
     if not training_set:
         logger.info('There is nothing else to do for an empty training set.')
-        return {'max_errs': [], 'max_err_mus': [], 'extensions': 0,
+        return {'max_errs_iter': max_errs_iter, 'max_err_mus_iter': max_err_mus_iter,
+                'max_errs_ext': max_errs_ext, 'max_err_mus_ext': max_err_mus_ext,
+                'extensions': extensions, 'iterations': iterations,
                 'time': time.perf_counter() - tic}
 
     if pool is None:
         pool = dummy_pool
-    # Always use parallel extension of basis by batch
-    parallel_batch = True
 
     # Distribute the training set evenly among the workers.
     training_set_rank = pool.scatter_list(training_set)
@@ -89,7 +98,6 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
     stopped = False
     while not stopped:
         with logger.block('Estimating errors ...'):
-            # max_err, max_err_mu = surrogate.evaluate(training_set)
             this_i_errs = surrogate.evaluate(training_set_rank, return_all_values=True)
             this_i_mus = []
 
@@ -124,26 +132,15 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
             stopped = True
             break
 
+        # Stop if every extension of the batch failes
         stopped = True
-        if parallel_batch:
-            with logger.block('Extending in parallel...'):
-                try:
-                    extensions += surrogate.extend(this_i_mus)
-                    stopped = False
-                except ExtensionError:
-                    pass
-        else:
-            for _, mu in enumerate(this_i_mus):
-                with logger.block(f'Extending surrogate for mu = {mu} ...'):
-                    try:
-                        surrogate.extend(mu)
-                        appended_mus.append(mu)
-                        stopped = False
-                    except ExtensionError:
-                        logger.info('This extension failed. '
-                                    'Still trying other extensions from the batch.')
-                        break
-                    extensions += 1
+        with logger.block('Extending in parallel...'):
+            try:
+                extensions += surrogate.extend(this_i_mus)
+                stopped = False  # At least one extension was successful
+            except ExtensionError:
+                pass
+
         iterations += 1
 
         logger.info('')
@@ -155,12 +152,12 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
 
     toc = time.perf_counter()
     logger.info(f'Greedy search took {toc - tic} seconds')
-    timings = surrogate.times
-    timings['greedy'] = toc - tic
+    times = surrogate.times
+    times['greedy'] = toc - tic
     return {'max_errs_iter': max_errs_iter, 'max_err_mus_iter': max_err_mus_iter,
             'max_errs_ext': max_errs_ext, 'max_err_mus_ext': max_err_mus_ext,
             'extensions': extensions, 'iterations': iterations,
-            'timings': timings}
+            'times': times}
 
 
 class WeakGreedySurrogate(BasicObject):
@@ -236,6 +233,8 @@ def rb_batch_greedy(fom, reductor, training_set, use_error_estimator=True, error
         problems.
     pool
         See :func:`weak_greedy`.
+    batchsize
+        Size of the batch that is used within the greedy algorithm.
 
     Returns
     -------
@@ -243,10 +242,15 @@ def rb_batch_greedy(fom, reductor, training_set, use_error_estimator=True, error
 
         :rom:                    The reduced |Model| obtained for the
                                  computed basis.
-        :max_errs:               Sequence of maximum errors during the greedy run.
-        :max_err_mus:            The parameters corresponding to `max_errs`.
+        :max_errs_iter:          Sequence of maximum estimated errors during the greedy run
+                                 per iteration.
+        :max_err_mus_iter:       The parameters corresponding to `max_errs` per iteration.
+        :max_errs_ext:           Sequence of maximum estimated errors during the greedy run
+                                 per extension.
+        :max_err_mus_ext:        The parameters corresponding to `max_errs` per extension.
         :extensions:             Number of performed basis extensions.
-        :time:                   Total runtime of the algorithm.
+        :iterations:             Number of greedy iterations.
+        :time:                   Splits of the runtime of the algorithm.
     """
     surrogate = RBSurrogate(fom, reductor, use_error_estimator, error_norm,
                             extension_params, pool or dummy_pool)
