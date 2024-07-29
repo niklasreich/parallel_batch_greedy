@@ -45,6 +45,19 @@ The following files contain source code originating from other open source softw
 
 See these files for more information.
 
+## Desciption of Code
+
+### Changed & Created Files
+#### src/batchgreedydemos/thermalblock.py
+Implementation of the model problem introduced in the paper. Arguments allow to vary the number of blocks in the domain, as well as the number of discrete values per block for the thermal conductivity. This file is meant to be executed (see below).
+#### src/pymor/algorithms/batchgreedy.py
+Implementation of the parallel batch greedy algorithm as presented in the paper (see Algorithm 3).
+#### src/bindings/scipy.py
+Small adaption to make the use of *UMFPACK* possible (see below for details).
+
+### Other files
+All other code files stem from the used pyMOR distribution. We refer to the [official documentation](https://docs.pymor.org/2024-1-0/index.html).
+
 ## Installation
 ### Necessary Packages
 
