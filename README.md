@@ -1,6 +1,6 @@
 # Parallel Batch Greedy Algorithm
 
-This repository includes the code to reprodoce the results of the paper
+This repository includes the code to reproduce the results of the paper
 
 *"A parallel batch greedy algorithm in reduced basis methods: Convergence rates and numerical results"*,  
 Niklas Reich, Karsten Urban, Jürgen Vorloeper, 2024.  
@@ -9,9 +9,9 @@ doi: https://doi.org/10.48550/arXiv.2407.11631
 
 ## License
 
-This code is build upon [pyMOR](https://pymor.org/) and therefore includes a full pyMOR distribution.
+This code is built upon [pyMOR](https://pymor.org/) and therefore includes a full pyMOR distribution.
 
-The authors of this repository created/adapted the follwoing files:
+The authors of this repository created/adapted the followoing files:
 
 * src/batchgreedydemos/thermalblock.py
 * src/pymor/algorithms/batchgreedy.py
@@ -23,8 +23,7 @@ See these files for more information.
 
 Copyright pyMOR developers and contributors. All rights reserved.
 
-Redistribution and use in source and binary forms, with or without modification, are permitted provided that the
-following conditions are met:
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
 
 * Redistributions of source code must retain the above copyright notice, this list of conditions and the following
   disclaimer.
@@ -50,18 +49,18 @@ See these files for more information.
 ### Necessary Packages
 
 This software has been developed with Python 3.10.
-We recommend installation via [pip](https://pip.pypa.io/en/stable/) in a [virtual environment](https://virtualenv.pypa.io/en/latest/).
-To install this software clone this repository or download it. When you navigated to the top level of your local copy use
+We recommend an installation via [pip](https://pip.pypa.io/en/stable/) in a [virtual environment](https://virtualenv.pypa.io/en/latest/).
+To install this software, clone this repository or download it. When you have navigated to the top level of your local copy, use
 
     pip install -e .
 
-to install all necessary packages to run the code.  
+to install all the necessary packages to run the code.  
 
 ### Optional Packages
-To achieve similar results to the paper you need to install two additional optional software components/packages.
+To reproduce the results of the paper, you need to install two additional optional software components/packages.
 
 #### MPI & mpi4py
-[MPI](https://www.mpi-forum.org/) is needed to compute the batch in parallel as intended. For more information on how to install MPI see [here](https://docs.open-mpi.org/en/v5.0.x/installing-open-mpi/quickstart.html). For many Linux distributions it is already installed.  
+[MPI](https://www.mpi-forum.org/) is needed to compute the batch in parallel, as intended. For more information on how to install MPI see [here](https://docs.open-mpi.org/en/v5.0.x/installing-open-mpi/quickstart.html). For many Linux distributions, it is already installed.  
 To use MPI with Python we need an interface from the mpi4py package that can be installed via
 
     pip install mpi4py
@@ -75,24 +74,24 @@ The benchmark problem that is described in the paper is found within the file `s
 
     python thermalblock.py [xblocks] [yblocks] [snapshots] [batchsize]
 
-Here `[xblocks]` is the number of blocks in x direction, `[yblocks]` is the number of blocks in y direction, `[snapshots]` is the number of discrete values per block for the thermal conductivity and `[batchsize]` is the batchsize of the parallel greedy algorithm. By setting `[batchsize]` to `1` we get an classical weak greedy algorithm.
+Here `[xblocks]` is the number of blocks in x direction, `[yblocks]` is the number of blocks in y direction, `[snapshots]` is the number of discrete values per block for the thermal conductivity, and `[batchsize]` is the batch size of the parallel greedy algorithm. By setting `[batchsize]` to `1` we get a classical weak greedy algorithm.
 
-When the code runs successfully it will put out a text-based summary in the end which sums up the used configuration as well as the results.
+When the code runs successfully, it will output a text-based summary at the end, which sums up the used configuration as well as the results.
 
-If you have MPI installed you can leverage a parallel worker pool by executing
+If you have MPI installed, you can leverage a parallel worker pool by executing
 
     mpiexec -n [numproc] python thermalblock.py [xblocks] [yblocks] [snapshots] [batchsize]
 
 where `[numproc]` is the number of workers.
 
-To give a concrete example the results of the paper were created by executing
+To give a concrete example, the results of the paper were created by executing
 
     mpiexec -n 30 python thermalblock.py 2 2 25 [batchsize]
 <!-- tsk -->
     mpiexec -n 30 python thermalblock.py 3 3 5 [batchsize]
     
 
-and `[batchsize]` was set to `1`, ... , `16`.
+and `[batchsize]` was set to `1`, ... , `16`, respectively.
 
 ### Smaller Test configuration
 
@@ -100,12 +99,14 @@ If you just want to make sure that the code runs, you can use
 
     python thermalblock.py [xblocks] [yblocks] [snapshots] [batchsize] --test-config
 
-This changes some otherwise static parameters, so that the benchmark finishes much faster.
+This changes some otherwise static parameters[^1], so that the benchmark finishes much faster.
 For example
 
     python thermalblock.py 2 2 5 3 --test-config
 
 should finish in under a minute.
 
-Of course, when using the test configuration the results are not related to the results 
+Of course, when using the test configuration, the results are not related to the results 
 presented in the paper.
+
+[^1]: The order of the full model is reduced (coarser spatial discretization), the size of the test set for the error analysis is reduced, and the size of the test set for the benchmarking of the reduced model is lowered.
