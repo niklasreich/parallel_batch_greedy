@@ -151,6 +151,17 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
                     max_err = np.max(this_i_errs)
                     max_ind = np.argmax(batch_errs)
                     max_batch_err = batch_errs[max_ind]
+
+                    if atol is not None and max_err <= atol:
+                        logger.info(f'Absolute error tolerance ({atol}) reached! Stopping extension loop.')
+                        stopped = True
+                        break
+
+                    if rtol is not None and max_err / max_errs_iter[0] <= rtol:
+                        logger.info(f'Relative error tolerance ({rtol}) reached! Stopping extension loop.')
+                        stopped = True
+                        break
+
                     # lambda_criteria
                     if max_batch_err >= lambda_tol*max_err:
                         successful = surrogate.extend_U(Us[max_ind])
