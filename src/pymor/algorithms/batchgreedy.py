@@ -90,7 +90,7 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
 
     stopped = False
     while not stopped:
-        if extensions==0:
+        if extensions==0 or batchsize==1:
             with logger.block('Estimating errors ...'):
                 this_i_errs = surrogate.evaluate(training_set_rank, return_all_values=True)
         with logger.block('Determine batch ...'):
