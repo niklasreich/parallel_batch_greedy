@@ -44,7 +44,7 @@ def main(
     assert batchsize>=0, 'Batch size must be nonnegative.'
     if batchsize==0: batchsize = len(pool)
 
-    grid = 100
+    grid = 300
     rb_size = 300
     rtol = 1e-5
     test_snapshots = 100
@@ -118,7 +118,12 @@ def main(
 
     results['settings'] = {'grid': grid, 'rb_size': rb_size, 'lambda': lambda_tol, 'rtol': rtol, 'test_snapshots': test_snapshots, 'n_online': n_online}
 
-    with open(f'thermalblock_{xblocks}x{yblocks}_N{len(pool)}_lambda{lambda_tol}.pkl', 'wb') as fp:
+    if batchsize==1:
+        filestring = f'thermalblock_{xblocks}x{yblocks}_B1_lambda{lambda_tol}.pkl'
+    else:
+        filestring = f'thermalblock_{xblocks}x{yblocks}_N{len(pool)}_lambda{lambda_tol}.pkl'
+
+    with open(filestring, 'wb') as fp:
             pickle.dump(results, fp)
 
     # global test_results
