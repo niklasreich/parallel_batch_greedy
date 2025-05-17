@@ -44,7 +44,7 @@ def main(
     assert batchsize>=0, 'Batch size must be nonnegative.'
     if batchsize==0: batchsize = len(pool)
 
-    grid = 300
+    grid = 1000
     rb_size = 300
     rtol = 1e-5
     test_snapshots = 100
