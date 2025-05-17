@@ -136,11 +136,12 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
         with logger.block(f'Extending with the first of the batch...'):
             successful_first = surrogate.extend_U(Us[0])
             
-        if successful_first:
-            extensions += 1
-        else:
+        if not successful_first:
             stopped = True
             break
+
+        extensions += 1
+        iterations += 1
 
         # Try the rest of the batch
         with logger.block(f'Extending with the rest of the batch...'):
@@ -171,8 +172,6 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
                 if successful:
                     continue
                 break
-        
-        iterations += 1
 
         logger.info('')
         if max_extensions is not None and extensions >= max_extensions:
