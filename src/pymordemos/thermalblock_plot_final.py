@@ -4,12 +4,12 @@ import matplotlib.pyplot as plt
 from os.path import isfile, join
 from os import listdir
 
-file_string = 'thermalblock_2x2'
+file_string = 'thermalblock_3x3'
 
-max_batchsize = 30
-plot_batch = [1, 2, 4, 8, 16]
+# max_batchsize = 30
+# plot_batch = [1, 2, 4, 8, 16]
 
-procs = 8
+procs = 30
 
 t_evaluate = []
 t_extend = []
@@ -39,6 +39,7 @@ for f in files:
     with open('src/pymordemos/'+f, 'rb') as f_:
         results = load(f_)
 
+        timings = results['timings']
     if 'B1' in f:
         rev_t_online = timings['online']
         rev_t_offline = timings['offline']
@@ -102,6 +103,8 @@ t_solve = np.array(t_solve)
 t_online = np.array(t_online)
 lambda_tol = np.array(lambda_tol)
 lambda_str = np.array(lambda_str)
+num_ext = np.array(num_ext)
+num_iter = np.array(num_iter)
 
 sort_ind = np.argsort(lambda_tol)
 
@@ -114,12 +117,14 @@ t_solve = t_solve[sort_ind]
 t_online = t_online[sort_ind]
 lambda_tol = lambda_tol[sort_ind]
 lambda_str = lambda_str[sort_ind]
+num_ext = num_ext[sort_ind]
+num_iter = num_iter[sort_ind]
 
 t_other = t_offline - t_evaluate - t_extend - t_reduce - t_solve
 
 t_sequential = {'solve': t_solve, 'evaluate': t_evaluate, 'extend': t_extend, 'reduce': t_reduce, 'other': t_other}
 
-fig.suptitle(f'2x2 Thermalblock')
+fig.suptitle(file_string)
 
 ### Subplot 00 (Upper left)
 ax[0,0].legend(loc="lower left")
