@@ -135,6 +135,7 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
         # Extend with first snapshot of the batch
         with logger.block(f'Extending with the first of the batch...'):
             successful_first = surrogate.extend_U(Us[0])
+            already_used = [0]
             
         if not successful_first:
             stopped = True
@@ -149,6 +150,8 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
                 with logger.block('Estimating errors ...'):
                     this_i_errs = surrogate.evaluate(training_set_rank, return_all_values=True)
                     batch_errs = this_i_errs[this_batch]
+                    # Set errors to zero if snapshots was already added
+                    batch_errs[already_used] = 0
                     max_err = np.max(this_i_errs)
                     max_ind = np.argmax(batch_errs)
                     max_batch_err = batch_errs[max_ind]
@@ -166,6 +169,7 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
                     # lambda_criteria
                     if max_batch_err >= lambda_tol*max_err:
                         successful = surrogate.extend_U(Us[max_ind])
+                        already_used.append(max_ind)
                         extensions += successful
                     else:
                         successful = False
@@ -374,6 +378,9 @@ class RBSurrogate(WeakGreedySurrogate):
         return successful_extensions
     
     def extend_U(self, U):
+        if len(U) != 1:
+            print(f"len(U): {len(U)}")
+            print(U)
         assert len(U)==1
         tic = time.perf_counter()
         successful = False
