@@ -90,7 +90,7 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
 
     stopped = False
     while not stopped:
-        if extensions==0 or batchsize==1:
+        if extensions==0 or batchsize==1 or lambda_tol==0:
             with logger.block('Estimating errors ...'):
                 this_i_errs = surrogate.evaluate(training_set_rank, return_all_values=True)
         with logger.block('Determine batch ...'):
@@ -145,38 +145,44 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
         iterations += 1
 
         # Try the rest of the batch
-        with logger.block(f'Extending with the rest of the batch...'):
-            for batch_extensions in range(1,batchsize):
-                with logger.block('Estimating errors ...'):
-                    this_i_errs = surrogate.evaluate(training_set_rank, return_all_values=True)
-                    batch_errs = this_i_errs[this_batch]
-                    # Set errors to zero if snapshots was already added
-                    batch_errs[already_used] = 0
-                    max_err = np.max(this_i_errs)
-                    max_ind = np.argmax(batch_errs)
-                    max_batch_err = batch_errs[max_ind]
+        if lambda_tol > 0:
+            with logger.block(f'Extending with the rest of the batch...'):
+                for batch_extensions in range(1,batchsize):
+                    with logger.block('Estimating errors ...'):
+                        this_i_errs = surrogate.evaluate(training_set_rank, return_all_values=True)
+                        batch_errs = this_i_errs[this_batch]
+                        # Set errors to zero if snapshots was already added
+                        batch_errs[already_used] = 0
+                        max_err = np.max(this_i_errs)
+                        max_ind = np.argmax(batch_errs)
+                        max_batch_err = batch_errs[max_ind]
 
-                    if atol is not None and max_err <= atol:
-                        logger.info(f'Absolute error tolerance ({atol}) reached! Stopping extension loop.')
-                        stopped = True
-                        break
+                        if atol is not None and max_err <= atol:
+                            logger.info(f'Absolute error tolerance ({atol}) reached! Stopping extension loop.')
+                            stopped = True
+                            break
 
-                    if rtol is not None and max_err / max_errs_iter[0] <= rtol:
-                        logger.info(f'Relative error tolerance ({rtol}) reached! Stopping extension loop.')
-                        stopped = True
-                        break
+                        if rtol is not None and max_err / max_errs_iter[0] <= rtol:
+                            logger.info(f'Relative error tolerance ({rtol}) reached! Stopping extension loop.')
+                            stopped = True
+                            break
 
-                    # lambda_criteria
-                    if max_batch_err >= lambda_tol*max_err:
-                        successful = surrogate.extend_U(Us[max_ind])
-                        already_used.append(max_ind)
-                        extensions += successful
-                    else:
-                        successful = False
-                if successful:
-                    continue
-                break
-
+                        # lambda_criteria
+                        if max_batch_err >= lambda_tol*max_err:
+                            successful = surrogate.extend_U(Us[max_ind])
+                            already_used.append(max_ind)
+                            extensions += successful
+                        else:
+                            successful = False
+                    if successful:
+                        continue
+                    break
+        else:
+            with logger.block(f'Extending with the rest of the batch without bulk criteria...'):
+                for batch_extensions in range(1,batchsize):
+                    successful_extension = surrogate.extend_U(Us[batch_extensions])
+                    extensions += successful_extension
+                    
         logger.info('')
         if max_extensions is not None and extensions >= max_extensions:
             logger.info(f'Maximum number of {max_extensions} extensions reached.')
