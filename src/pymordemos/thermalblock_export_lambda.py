@@ -4,7 +4,7 @@ from os.path import isfile, join
 from os import listdir
 from pandas import DataFrame as DF
 
-file_string = 'thermalblock_3x3'
+file_string = 'thermalblock_2x2'
 
 procs = 30
 
@@ -121,6 +121,9 @@ lambda_str = lambda_str[sort_ind]
 num_ext = num_ext[sort_ind]
 num_iter = num_iter[sort_ind]
 
+eff_bs = num_ext/num_iter
+rel_size = num_ext/num_ext[-1]
+
 t_other = t_offline - t_evaluate - t_extend - t_reduce - t_solve
 
 t_offline_n = t_offline/rev_t_offline
@@ -129,7 +132,7 @@ t_online_n = t_online/rev_t_online
 data = {'lambda': lambda_tol,
         't_solve': t_solve, 't_evaluate': t_evaluate, 't_extend': t_extend, 't_reduce': t_reduce, 't_other': t_other,
         't_offline_n': t_offline_n, 't_online_n': t_online_n,
-        'num_ext': num_ext, 'num_iter': num_iter}
+        'num_ext': num_ext, 'num_iter': num_iter, 'eff_bs': eff_bs, 'rel_size': rel_size}
 
 df_seq = DF(data)
 df_seq.to_csv('thermalblock_lambda_overall.data', index=False)
