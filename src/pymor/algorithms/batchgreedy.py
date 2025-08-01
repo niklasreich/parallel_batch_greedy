@@ -67,11 +67,11 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
     training_set = list(training_set)
     logger.info(f'Started batch greedy search on training set of size {len(training_set)}.')
 
-    tic = time.perf_counter()
+    tic_greedy = time.perf_counter()
     if not training_set:
         logger.info('There is nothing else to do for an empty training set.')
         return {'max_errs': [], 'max_err_mus': [], 'extensions': 0,
-                'time': time.perf_counter() - tic}
+                'time': time.perf_counter() - tic_greedy}
 
     # parallel_batch = False
     if pool is None:
@@ -90,9 +90,9 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
 
     stopped = False
     while not stopped:
-        if extensions==0 or batchsize==1 or lambda_tol==0:
-            with logger.block('Estimating errors ...'):
-                this_i_errs = surrogate.evaluate(training_set_rank, return_all_values=True)
+        # if extensions==0 or batchsize==1 or lambda_tol==0:
+        with logger.block('Estimating errors ...'):
+            this_i_errs = surrogate.evaluate(training_set_rank, return_all_values=True)
         with logger.block('Determine batch ...'):
             this_i_mus = []
             this_batch = []
@@ -132,56 +132,30 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
         # Compute snapshots in parallel
         Us = surrogate.parallel_compute(this_i_mus)
 
+        Us_vec = Us[0]
+        for i in range(1,len(Us)):
+            Us_vec.append(Us[i])
+
         # Extend with first snapshot of the batch
-        with logger.block(f'Extending with the first of the batch...'):
-            successful_first = surrogate.extend_U(Us[0])
-            already_used = [0]
-            
-        if not successful_first:
-            stopped = True
-            break
+        tic = time.perf_counter()
+        with logger.block(f'Extending with POD of the batch...'):
+            extension_params = {'method': 'pod', 'pod_modes': None}
+            n_before = len(surrogate.reductor.bases['RB'])
+            surrogate.reductor.extend_basis(Us_vec, copy_U=False, **(extension_params or {}))
+            n_after = len(surrogate.reductor.bases['RB'])
+        toc = time.perf_counter()
+        surrogate.times['pod'] += toc - tic
 
-        extensions += 1
+        tic = time.perf_counter()
+        if not surrogate.use_error_estimator:
+            surrogate.remote_reductor = surrogate.pool.push(surrogate.reductor)
+        with surrogate.logger.block('Reducing ...'):
+            surrogate.rom = surrogate.reductor.reduce()
+        toc = time.perf_counter()
+        surrogate.times['reduce'] += toc - tic
+
+        extensions += n_after - n_before
         iterations += 1
-
-        # Try the rest of the batch
-        if lambda_tol > 0:
-            with logger.block(f'Extending with the rest of the batch...'):
-                for batch_extensions in range(1,batchsize):
-                    with logger.block('Estimating errors ...'):
-                        this_i_errs = surrogate.evaluate(training_set_rank, return_all_values=True)
-                        batch_errs = this_i_errs[this_batch]
-                        # Set errors to zero if snapshots was already added
-                        batch_errs[already_used] = 0
-                        max_err = np.max(this_i_errs)
-                        max_ind = np.argmax(batch_errs)
-                        max_batch_err = batch_errs[max_ind]
-
-                        if atol is not None and max_err <= atol:
-                            logger.info(f'Absolute error tolerance ({atol}) reached! Stopping extension loop.')
-                            stopped = True
-                            break
-
-                        if rtol is not None and max_err / max_errs_iter[0] <= rtol:
-                            logger.info(f'Relative error tolerance ({rtol}) reached! Stopping extension loop.')
-                            stopped = True
-                            break
-
-                        # lambda_criteria
-                        if max_batch_err >= lambda_tol*max_err:
-                            successful = surrogate.extend_U(Us[max_ind])
-                            already_used.append(max_ind)
-                            extensions += successful
-                        else:
-                            successful = False
-                    if successful:
-                        continue
-                    break
-        else:
-            with logger.block(f'Extending with the rest of the batch without bulk criteria...'):
-                for batch_extensions in range(1,batchsize):
-                    successful_extension = surrogate.extend_U(Us[batch_extensions])
-                    extensions += successful_extension
                     
         logger.info('')
         if max_extensions is not None and extensions >= max_extensions:
@@ -189,10 +163,10 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
             stopped = True
             break
 
-    toc = time.perf_counter()
-    logger.info(f'Greedy search took {toc - tic} seconds with an effective batch size of {1.*extensions/iterations}.')
+    toc_greedy = time.perf_counter()
+    logger.info(f'Greedy search took {toc_greedy - tic_greedy} seconds with an effective batch size of {1.*extensions/iterations}.')
     timings = surrogate.times
-    timings['greedy'] = toc - tic
+    timings['greedy'] = toc_greedy - tic_greedy
     return {'max_errs_iter': max_errs_iter, 'max_err_mus_iter': max_err_mus_iter,
             'max_errs_ext': max_errs_ext, 'max_err_mus_ext': max_err_mus_ext,
             'extensions': extensions, 'iterations': iterations,
@@ -310,7 +284,7 @@ class RBSurrogate(WeakGreedySurrogate):
         self.remote_fom = pool.push(fom)
         self.rom = None
 
-        self.times = {'evaluate': 0, 'extend': 0, 'reduce': 0, 'solve': 0}
+        self.times = {'evaluate': 0, 'extend': 0, 'reduce': 0, 'solve': 0, 'pod': 0}
 
 
     def evaluate(self, mus, return_all_values=False):
