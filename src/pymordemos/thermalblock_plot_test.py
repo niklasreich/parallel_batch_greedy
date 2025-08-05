@@ -1,10 +1,13 @@
 import numpy as np
 from pymor.core.pickle import load
+import matplotlib.pyplot as plt
 from os.path import isfile, join
 from os import listdir
-from pandas import DataFrame as DF
 
-file_string = 'thermalblock_2x2'
+file_string = 'thermalblock_3x3'
+
+# max_batchsize = 30
+# plot_batch = [1, 2, 4, 8, 16]
 
 procs = 30
 
@@ -29,6 +32,8 @@ files = [f for f in listdir('src/pymordemos') if isfile(join('src/pymordemos', f
 files = [f for f in files if file_string in f and 'lambda' in f]
 files = [f for f in files if f'N{procs}' in f or 'B1' in f]
 
+fig, ax = plt.subplots(2,2)
+
 for f in files:
 
     with open('src/pymordemos/'+f, 'rb') as f_:
@@ -47,12 +52,9 @@ for f in files:
         rev_num_iter = results['num_iterations']
         rev_num_ext = results['num_extensions']
 
-        # ax[0,0].semilogy(results['max_rel_errors'][0],label='classical')
-        # if len(results['max_rel_errors'][0]) > ax00_y_max:
-        #     ax00_y_max = len(results['max_rel_errors'][0])
-        df = DF()
-        df = df.assign(err=results['max_rel_errors'][0])
-        df.to_csv('thermalblock_lambda_cwg.data', sep=',', index_label='n')
+        ax[0,0].semilogy(results['max_rel_errors'][0],label='classical')
+        if len(results['max_rel_errors'][0]) > ax00_y_max:
+            ax00_y_max = len(results['max_rel_errors'][0])
 
     else:
 
@@ -74,12 +76,9 @@ for f in files:
         lambda_str.append(f"{lambda_val}")
 
         ### Subplot 00 (Upper left)
-        # ax[0,0].semilogy(results['max_rel_errors'][0],':',label=f'$\lambda={lambda_val}$')
-        # if len(results['max_rel_errors'][0]) > ax00_y_max:
-        #     ax00_y_max = len(results['max_rel_errors'][0])
-        df = DF()
-        df = df.assign(err=results['max_rel_errors'][0])
-        df.to_csv('thermalblock_lambda' + str(lambda_val) + '.data', sep=',', index_label='n')
+        ax[0,0].semilogy(results['max_rel_errors'][0],':',label=f'$\lambda={lambda_val}$')
+        if len(results['max_rel_errors'][0]) > ax00_y_max:
+            ax00_y_max = len(results['max_rel_errors'][0])
 
 
 t_evaluate.append(rev_t_eveluate)
@@ -121,19 +120,49 @@ lambda_str = lambda_str[sort_ind]
 num_ext = num_ext[sort_ind]
 num_iter = num_iter[sort_ind]
 
-eff_bs = num_ext/num_iter
-rel_size = num_ext/num_ext[-1]
-
 t_other = t_offline - t_evaluate - t_extend - t_reduce - t_solve
 
-t_offline_n = t_offline/rev_t_offline
+t_sequential = {'solve': t_solve, 'evaluate': t_evaluate, 'extend': t_extend, 'reduce': t_reduce, 'other': t_other}
+
+fig.suptitle(file_string)
+
+### Subplot 00 (Upper left)
+ax[0,0].legend(loc="lower left")
+ax[0,0].set_ylabel('err in $H^1_0$ semi norm')
+ax[0,0].set_xlabel('basis size n')
+ax[0,0].grid(axis='y')
+ax[0,0].set_axisbelow(True)
+ax[0,0].plot([0,ax00_y_max],[1e-5,1e-5],'k--')
+
+### Subplot 01 (Upper right)
+bottom = np.zeros(len(lambda_tol))
+width = 0.5
+for title, time in t_sequential.items():
+    p = ax[0,1].bar(lambda_str, time, width, label=title, bottom=bottom)
+    bottom += time
+ax[0,1].legend(loc="upper left")
+ax[0,1].set_ylabel('offline time [s]')
+ax[0,1].set_xlabel('$\lambda$')
+ax[0,1].grid(axis='y')
+ax[0,1].set_axisbelow(True)
+
+### Subplot 10 (Lower left)
+# ax[1,0].semilogx([np.min(lambda_tol),1],[rev_num_iter,rev_num_iter],'k--')
+ax[1,0].semilogx(lambda_tol[:-1], num_ext[:-1]/num_ext[-1], 'o:', label='Basis size')
+# ax[1,0].semilogx(lambda_tol[:-1], num_ext[:-1]/num_iter[:-1], 'o:', label='Greedy Iterations')
+ax[1,0].grid(axis='y')
+ax[1,0].set_axisbelow(True)
+ax[1,0].set_xlabel('$\lambda$')
+ax[1,0].legend(loc=0)
+
+### Subplot 10 (Lower right)
 t_online_n = t_online/rev_t_online
-
-data = {'lambda': lambda_tol,
-        't_solve': t_solve, 't_evaluate': t_evaluate, 't_extend': t_extend, 't_reduce': t_reduce, 't_other': t_other,
-        't_offline_n': t_offline_n, 't_online_n': t_online_n,
-        'num_ext': num_ext, 'num_iter': num_iter, 'eff_bs': eff_bs, 'rel_size': rel_size}
-
-df_seq = DF(data)
-df_seq.to_csv('thermalblock_lambda_overall.data', index=False)
-
+t_offline_n = t_offline/rev_t_offline
+ax[1,1].semilogx([np.min(lambda_tol),1],[1,1],'k--')
+ax[1,1].semilogx(lambda_tol[:-1], t_online_n[:-1], 'o:', label='Norm. online time')
+ax[1,1].semilogx(lambda_tol[:-1], t_offline_n[:-1], 'o:', label='Norm. offline time')
+ax[1,1].grid(axis='y')
+ax[1,1].set_axisbelow(True)
+ax[1,1].set_xlabel('$\lambda$')
+ax[1,1].legend(loc=0)
+plt.show()
