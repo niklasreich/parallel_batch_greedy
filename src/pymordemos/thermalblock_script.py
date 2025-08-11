@@ -47,7 +47,7 @@ def main(
 
     set_defaults({'pymor.algorithms.pod.pod.rtol': lambda_tol})
 
-    grid = 100
+    grid = 1000
     rb_size = 300
     rtol = 1e-5
     test_snapshots = 100
