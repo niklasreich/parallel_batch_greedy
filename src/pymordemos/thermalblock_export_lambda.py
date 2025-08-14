@@ -136,7 +136,7 @@ t_online_n = t_online/rev_t_online
 
 data = {'lambda': lambda_tol,
         't_solve': t_solve, 't_evaluate': t_evaluate, 't_extend': t_extend, 't_reduce': t_reduce, 't_pod': t_pod, 't_other': t_other,
-        't_offline_n': t_offline_n, 't_online_n': t_online_n,
+        't_offline': t_offline, 't_online': t_online, 't_offline_n': t_offline_n, 't_online_n': t_online_n,
         'num_ext': num_ext, 'num_iter': num_iter, 'eff_bs': eff_bs, 'rel_size': rel_size}
 
 df_seq = DF(data)
