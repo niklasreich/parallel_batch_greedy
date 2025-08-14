@@ -55,6 +55,7 @@ README.txt
 .settings/
 .cache/
 .kateproject*
+venv
 venvs
 .venv
 .idea
