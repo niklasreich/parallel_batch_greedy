@@ -15,6 +15,7 @@ t_offline = []
 t_reduce = []
 t_solve = []
 t_online = []
+t_pod = []
 
 lambda_tol = []
 lambda_str = []
@@ -28,6 +29,7 @@ ax00_y_max = 0
 files = [f for f in listdir('src/pymordemos') if isfile(join('src/pymordemos', f))]
 files = [f for f in files if file_string in f and 'lambda' in f]
 files = [f for f in files if f'N{procs}' in f or 'B1' in f]
+files = [f for f in files if 'POD' in f or 'B1' in f]
 
 for f in files:
 
@@ -65,6 +67,7 @@ for f in files:
         t_reduce.append(timings['reduce'])
         t_solve.append(timings['solve'])
         t_online.append(timings['online'])
+        t_pod.append(timings['pod'])
 
         num_ext.append(results['num_extensions'])
         num_iter.append(results['num_iterations'])
@@ -79,7 +82,7 @@ for f in files:
         #     ax00_y_max = len(results['max_rel_errors'][0])
         df = DF()
         df = df.assign(err=results['max_rel_errors'][0])
-        df.to_csv('thermalblock_lambda' + str(lambda_val) + '.data', sep=',', index_label='n')
+        df.to_csv('thermalblock_pod_lambda' + str(lambda_val) + '.data', sep=',', index_label='n')
 
 
 t_evaluate.append(rev_t_eveluate)
@@ -89,6 +92,7 @@ t_reduce.append(rev_t_reduce)
 t_solve.append(rev_t_solve)
 t_online.append(rev_t_online)
 t_greedy.append(rev_t_greedy)
+t_pod.append(0)
 num_ext.append(rev_num_ext)
 num_iter.append(rev_num_iter)
 lambda_tol.append(2.) #Put at the end after sorting
@@ -102,6 +106,7 @@ t_offline = np.array(t_offline)
 t_reduce = np.array(t_reduce)
 t_solve = np.array(t_solve)
 t_online = np.array(t_online)
+t_pod = np.array(t_pod)
 lambda_tol = np.array(lambda_tol)
 lambda_str = np.array(lambda_str)
 num_ext = np.array(num_ext)
@@ -130,10 +135,10 @@ t_offline_n = t_offline/rev_t_offline
 t_online_n = t_online/rev_t_online
 
 data = {'lambda': lambda_tol,
-        't_solve': t_solve, 't_evaluate': t_evaluate, 't_extend': t_extend, 't_reduce': t_reduce, 't_other': t_other,
+        't_solve': t_solve, 't_evaluate': t_evaluate, 't_extend': t_extend, 't_reduce': t_reduce, 't_pod': t_pod, 't_other': t_other,
         't_offline_n': t_offline_n, 't_online_n': t_online_n,
         'num_ext': num_ext, 'num_iter': num_iter, 'eff_bs': eff_bs, 'rel_size': rel_size}
 
 df_seq = DF(data)
-df_seq.to_csv('thermalblock_lambda_overall.data', index=False)
+df_seq.to_csv('thermalblock_pod_lambda_overall.data', index=False)
 
