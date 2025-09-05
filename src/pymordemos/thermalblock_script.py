@@ -123,10 +123,16 @@ def main(
 
     results['settings'] = {'grid': grid, 'rb_size': rb_size, 'lambda': lambda_tol, 'rtol': rtol, 'test_snapshots': test_snapshots, 'n_online': n_online}
 
-    if batchsize==1:
-        filestring = f'thermalblock_{xblocks}x{yblocks}_POD_B1_lambda{lambda_tol}.pkl'
+    if use_pod:
+        if batchsize==1:
+            filestring = f'thermalblock_{xblocks}x{yblocks}_POD_B1_lambda{lambda_tol}.pkl'
+        else:
+            filestring = f'thermalblock_{xblocks}x{yblocks}_POD_N{len(pool)}_lambda{lambda_tol}.pkl'
     else:
-        filestring = f'thermalblock_{xblocks}x{yblocks}_POD_N{len(pool)}_lambda{lambda_tol}.pkl'
+        if batchsize==1:
+            filestring = f'thermalblock_{xblocks}x{yblocks}_B1_lambda{lambda_tol}.pkl'
+        else:
+            filestring = f'thermalblock_{xblocks}x{yblocks}_N{len(pool)}_lambda{lambda_tol}.pkl'
 
     with open(filestring, 'wb') as fp:
             pickle.dump(results, fp)
