@@ -31,6 +31,7 @@ def main(
              'adaptive_greedy: size of validation set.\n\n'
     ),
     batchsize: int = Argument(..., help='Size of the (parallel) batch in each greedy iteration.'),
+    use_pod: bool = Argument(..., help='Use POD on batch or bulk criterion.'),
     lambda_tol: float = Argument(..., help='Tolerance for rest of the batch.')
 ):
     """Thermalblock demo."""
@@ -47,7 +48,7 @@ def main(
 
     set_defaults({'pymor.algorithms.pod.pod.rtol': lambda_tol})
 
-    grid = 1000
+    grid = 100
     rb_size = 300
     rtol = 1e-5
     test_snapshots = 100
@@ -84,6 +85,7 @@ def main(
                                   batchsize=batchsize,
                                   rtol=rtol,
                                   lambda_tol=lambda_tol,
+                                  use_POD=use_pod
                                   )
 
     toc = time.perf_counter()

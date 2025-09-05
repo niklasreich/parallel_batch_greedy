@@ -15,7 +15,7 @@ from pymor.parallel.interface import RemoteObject
 
 
 def weak_batch_greedy_with_bulk(surrogate, training_set, atol=None, rtol=None, max_extensions=None, pool=None,
-                      batchsize=None, greedy_start=None, lambda_tol=0.5):
+                      batchsize=None, lambda_tol=0.5):
     """Weak greedy basis generation algorithm :cite:`BCDDPW11`.
 
     This algorithm generates an approximation basis for a given set of vectors
@@ -71,7 +71,7 @@ def weak_batch_greedy_with_bulk(surrogate, training_set, atol=None, rtol=None, m
 
     logger = getLogger('pymor.algorithms.greedy.weak_greedy')
     training_set = list(training_set)
-    logger.info(f'Started batch greedy search on training set of size {len(training_set)}.')
+    logger.info(f'Started batch greedy search with bulk parameter {lambda_tol} on training set of size {len(training_set)}.')
 
     tic = time.perf_counter()
     if not training_set:
@@ -203,7 +203,7 @@ def weak_batch_greedy_with_bulk(surrogate, training_set, atol=None, rtol=None, m
             'timings': timings}
 
 def weak_batch_greedy_pod(surrogate, training_set, atol=None, rtol=None, max_extensions=None, pool=None,
-                      batchsize=None, greedy_start=None, lambda_tol=0.5):
+                      batchsize=None, lambda_tol=0.5):
     """Weak greedy basis generation algorithm :cite:`BCDDPW11`.
 
     This algorithm generates an approximation basis for a given set of vectors
@@ -250,7 +250,7 @@ def weak_batch_greedy_pod(surrogate, training_set, atol=None, rtol=None, max_ext
 
     logger = getLogger('pymor.algorithms.greedy.weak_greedy')
     training_set = list(training_set)
-    logger.info(f'Started batch greedy search on training set of size {len(training_set)}.')
+    logger.info(f'Started batch greedy search with POD and rel. tol. {lambda_tol} on training set of size {len(training_set)}.')
 
     tic_greedy = time.perf_counter()
     if not training_set:
@@ -298,9 +298,6 @@ def weak_batch_greedy_pod(surrogate, training_set, atol=None, rtol=None, max_ext
                 this_i_errs[max_ind] = 0
 
                 appended_mus.append(training_set[max_ind])
-                
-                if greedy_start == 'single_zero' and (extensions == 0) and (iterations == 0):
-                    break
 
         logger.info(f'Maximum error after {iterations} iterations ({extensions} extensions): {max_err} (mu = {max_err_mu})')
 
@@ -388,7 +385,7 @@ class WeakGreedySurrogate(BasicObject):
 
 def rb_batch_greedy(fom, reductor, training_set, use_error_estimator=True, error_norm=None,
                     atol=None, rtol=None, max_extensions=None, extension_params=None, pool=None,
-                    batchsize=None, greedy_start=None, lambda_tol=0.5):
+                    batchsize=None, use_POD=False, lambda_tol=0.5):
     """Weak Greedy basis generation using the RB approximation error as surrogate.
 
     This algorithm generates a reduced basis using the :func:`weak greedy <weak_greedy>`
@@ -453,8 +450,12 @@ def rb_batch_greedy(fom, reductor, training_set, use_error_estimator=True, error
     surrogate = RBSurrogate(fom, reductor, use_error_estimator, error_norm,
                             extension_params, pool or dummy_pool)
 
-    result = weak_batch_greedy(surrogate, training_set, atol=atol, rtol=rtol, max_extensions=max_extensions, pool=pool,
-                               batchsize=batchsize, greedy_start=greedy_start, lambda_tol=lambda_tol)
+    if use_POD:
+        result = weak_batch_greedy_pod(surrogate, training_set, atol=atol, rtol=rtol, max_extensions=max_extensions, pool=pool,
+                                batchsize=batchsize, lambda_tol=lambda_tol)
+    else:
+        result = weak_batch_greedy_with_bulk(surrogate, training_set, atol=atol, rtol=rtol, max_extensions=max_extensions, pool=pool,
+                                batchsize=batchsize, lambda_tol=lambda_tol)
     result['rom'] = surrogate.rom
     result['greedytimes'] = surrogate.times
 
