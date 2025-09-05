@@ -26,7 +26,9 @@ def main(
         help='Number of training_set parameters per block\n\n'
     ),
     batchsize: int = Argument(..., help='Size of the (parallel) batch in each greedy iteration.'),
-    test_config: bool = Option(False, help='Plot error')
+    use_pod: bool = Argument(..., help='Use POD on batch or bulk criterion.'),
+    lambda_tol: float = Argument(..., help='Tolerance for rest of the batch.'),
+    test_config: bool = Option(False, help='Use test configuration or benchmark configuration.')
 ):
     """Thermalblock script for the parallel batch greedy algorithm."""
 
@@ -85,7 +87,9 @@ def main(
                                   max_extensions=rb_size,
                                   pool=pool,
                                   batchsize=batchsize,
-                                  rtol=rtol
+                                  rtol=rtol,
+                                  use_POD=use_pod,
+                                  lambda_tol=lambda_tol
                                   )
 
     toc = time.perf_counter()
@@ -126,11 +130,13 @@ def main(
                                  - results['times']['solve']
                                  - results['times']['evaluate']
                                  - results['times']['extend']
-                                 - results['times']['reduce'])
+                                 - results['times']['reduce']
+                                 - results['times']['pod'])
     results['settings'] = {'grid': grid, 'rb_size': rb_size, 'rtol': rtol,
                            'test_snapshots': test_snapshots, 'n_online': test_online}
 
     # print a summary
+    version = 'POD' if use_pod else 'Bulk'
     print(
         "\n" + "\033[1m"+"Summary:"+"\033[0m\n"
         "\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501"
@@ -151,7 +157,11 @@ def main(
         "\u2503  \u251c\u2500 " # indentation
         "Batch greedy algorithm:\n"
         "\u2503  \u2502  \u251c\u2500 " # indentation
+        f"Version: {version}\n"
+        "\u2503  \u2502  \u251c\u2500 " # indentation
         f"Batchsize: {batchsize}\n"
+        "\u2503  \u2502  \u251c\u2500 " # indentation
+        f"Lambda: {lambda_tol}\n"
         "\u2503  \u2502  \u2514\u2500 " # indentation
         f"Rel. target tolerance: {rtol}\n"
         "\u2503  \u251c\u2500 " # indentation
@@ -177,6 +187,9 @@ def main(
         "\u2503  \u2502  \u251c\u2500 " # indentation
         f"Reduce:   {results['times']['reduce']:.4e} sec. - "
         f"{results['times']['reduce']/results['times']['offline']*100:4.1f}%\n"
+        "\u2503  \u2502  \u251c\u2500 " # indentation
+        f"POD:      {results['times']['pod']:.4e} sec. - "
+        f"{results['times']['pod']/results['times']['offline']*100:4.1f}%\n"
         "\u2503  \u2502  \u2514\u2500 " # indentation
         f"Other:    {results['times']['other']:.4e} sec. - "
         f"{results['times']['other']/results['times']['offline']*100:4.1f}%\n"
