@@ -14,7 +14,7 @@ from pymor.parallel.dummy import dummy_pool
 from pymor.parallel.interface import RemoteObject
 
 
-def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensions=None, pool=None,
+def weak_batch_greedy_with_bulk(surrogate, training_set, atol=None, rtol=None, max_extensions=None, pool=None,
                       batchsize=None, greedy_start=None, lambda_tol=0.5):
     """Weak greedy basis generation algorithm :cite:`BCDDPW11`.
 
@@ -202,6 +202,161 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
             'extensions': extensions, 'iterations': iterations,
             'timings': timings}
 
+def weak_batch_greedy_pod(surrogate, training_set, atol=None, rtol=None, max_extensions=None, pool=None,
+                      batchsize=None, greedy_start=None, lambda_tol=0.5):
+    """Weak greedy basis generation algorithm :cite:`BCDDPW11`.
+
+    This algorithm generates an approximation basis for a given set of vectors
+    associated with a training set of parameters by iteratively evaluating a
+    :class:`surrogate <WeakGreedySurrogate>` for the approximation error on
+    the training set and adding the worst approximated vector (according to
+    the surrogate) to the basis.
+
+    The constructed basis is extracted from the surrogate after termination
+    of the algorithm.
+
+    Parameters
+    ----------
+    surrogate
+        An instance of :class:`WeakGreedySurrogate` representing the surrogate
+        for the approximation error.
+    training_set
+        The set of parameter samples on which to perform the greedy search.
+    atol
+        If not `None`, stop the algorithm if the maximum (estimated) error
+        on the training set drops below this value.
+    rtol
+        If not `None`, stop the algorithm if the maximum (estimated)
+        relative error on the training set drops below this value.
+    max_extensions
+        If not `None`, stop the algorithm after `max_extensions` extension
+        steps.
+    pool
+        If not `None`, a |WorkerPool| to use for parallelization. Parallelization
+        needs to be supported by `surrogate`.
+
+    Returns
+    -------
+    Dict with the following fields:
+
+        :max_errs:               Sequence of maximum estimated errors during the greedy run.
+        :max_err_mus:            The parameters corresponding to `max_errs`.
+        :extensions:             Number of performed basis extensions.
+        :time:                   Total runtime of the algorithm.
+    """
+
+    if batchsize is None:
+        batchsize = 1
+
+    logger = getLogger('pymor.algorithms.greedy.weak_greedy')
+    training_set = list(training_set)
+    logger.info(f'Started batch greedy search on training set of size {len(training_set)}.')
+
+    tic_greedy = time.perf_counter()
+    if not training_set:
+        logger.info('There is nothing else to do for an empty training set.')
+        return {'max_errs': [], 'max_err_mus': [], 'extensions': 0,
+                'time': time.perf_counter() - tic_greedy}
+
+    # parallel_batch = False
+    if pool is None:
+        pool = dummy_pool
+
+    # Distribute the training set evenly among the workers.
+    training_set_rank = pool.scatter_list(training_set)
+
+    extensions = 0
+    iterations = 0
+    max_errs_ext = []
+    max_err_mus_ext = []
+    max_errs_iter = []
+    max_err_mus_iter = []
+    appended_mus = []
+
+    stopped = False
+    while not stopped:
+        # if extensions==0 or batchsize==1 or lambda_tol==0:
+        with logger.block('Estimating errors ...'):
+            this_i_errs = surrogate.evaluate(training_set_rank, return_all_values=True)
+        with logger.block('Determine batch ...'):
+            this_i_mus = []
+            this_batch = []
+            for i in range(batchsize):
+                max_ind = np.argmax(this_i_errs)
+                this_batch.append(max_ind)
+                if i == 0:  # only once per batch -> once every greedy iteration
+                    max_err = this_i_errs[max_ind]
+                    max_err_mu = training_set[max_ind]
+                    max_errs_iter.append(max_err)
+                    max_err_mus_iter.append(max_err_mu)
+
+                # for every mu of the batch -> once every basis extension
+                max_errs_ext.append(this_i_errs[max_ind])
+                max_err_mus_ext.append(training_set[max_ind])
+
+                this_i_mus.append(training_set[max_ind])
+                this_i_errs[max_ind] = 0
+
+                appended_mus.append(training_set[max_ind])
+                
+                if greedy_start == 'single_zero' and (extensions == 0) and (iterations == 0):
+                    break
+
+        logger.info(f'Maximum error after {iterations} iterations ({extensions} extensions): {max_err} (mu = {max_err_mu})')
+
+        if atol is not None and max_err <= atol:
+            logger.info(f'Absolute error tolerance ({atol}) reached! Stopping extension loop.')
+            stopped = True
+            break
+
+        if rtol is not None and max_err / max_errs_iter[0] <= rtol:
+            logger.info(f'Relative error tolerance ({rtol}) reached! Stopping extension loop.')
+            stopped = True
+            break
+
+        # Compute snapshots in parallel
+        Us = surrogate.parallel_compute(this_i_mus)
+
+        Us_vec = Us[0]
+        for i in range(1,len(Us)):
+            Us_vec.append(Us[i])
+
+        # Extend with first snapshot of the batch
+        tic = time.perf_counter()
+        with logger.block(f'Extending with POD of the batch...'):
+            extension_params = {'method': 'pod', 'pod_modes': None}
+            n_before = len(surrogate.reductor.bases['RB'])
+            surrogate.reductor.extend_basis(Us_vec, copy_U=False, **(extension_params or {}))
+            n_after = len(surrogate.reductor.bases['RB'])
+        toc = time.perf_counter()
+        surrogate.times['pod'] += toc - tic
+
+        tic = time.perf_counter()
+        if not surrogate.use_error_estimator:
+            surrogate.remote_reductor = surrogate.pool.push(surrogate.reductor)
+        with surrogate.logger.block('Reducing ...'):
+            surrogate.rom = surrogate.reductor.reduce()
+        toc = time.perf_counter()
+        surrogate.times['reduce'] += toc - tic
+
+        extensions += n_after - n_before
+        iterations += 1
+                    
+        logger.info('')
+        if max_extensions is not None and extensions >= max_extensions:
+            logger.info(f'Maximum number of {max_extensions} extensions reached.')
+            stopped = True
+            break
+
+    toc_greedy = time.perf_counter()
+    logger.info(f'Greedy search took {toc_greedy - tic_greedy} seconds with an effective batch size of {1.*extensions/iterations}.')
+    timings = surrogate.times
+    timings['greedy'] = toc_greedy - tic_greedy
+    return {'max_errs_iter': max_errs_iter, 'max_err_mus_iter': max_err_mus_iter,
+            'max_errs_ext': max_errs_ext, 'max_err_mus_ext': max_err_mus_ext,
+            'extensions': extensions, 'iterations': iterations,
+            'timings': timings}
+
 
 class WeakGreedySurrogate(BasicObject):
     """Surrogate for the approximation error in :func:`weak_greedy`."""
@@ -322,7 +477,7 @@ class RBSurrogate(WeakGreedySurrogate):
         self.remote_fom = pool.push(fom)
         self.rom = None
 
-        self.times = {'evaluate': 0, 'extend': 0, 'reduce': 0, 'solve': 0}
+        self.times = {'evaluate': 0, 'extend': 0, 'reduce': 0, 'solve': 0, 'pod': 0}
 
 
     def evaluate(self, mus, return_all_values=False):

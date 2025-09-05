@@ -57,6 +57,7 @@ README.txt
 .kateproject*
 venv
 venvs
+venv
 .venv
 .idea
 
