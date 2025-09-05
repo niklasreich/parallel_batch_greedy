@@ -15,8 +15,8 @@ from pymor.parallel.interface import RemoteObject
 
 
 def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensions=None, pool=None,
-                      batchsize=None):
-    """Weak greedy basis generation algorithm with a batch logic.
+                      batchsize=None, greedy_start=None, lambda_tol=0.5):
+    """Weak greedy basis generation algorithm :cite:`BCDDPW11`.
 
     This algorithm generates an approximation basis for a given set of vectors
     associated with a training set of parameters by iteratively evaluating a
@@ -69,7 +69,7 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
     if batchsize is None:
         batchsize = 1
 
-    logger = getLogger('pymor.algorithms.batchgreedy.weak_batch_greedy')
+    logger = getLogger('pymor.algorithms.greedy.weak_greedy')
     training_set = list(training_set)
     logger.info(f'Started batch greedy search on training set of size {len(training_set)}.')
 
@@ -97,12 +97,15 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
 
     stopped = False
     while not stopped:
-        with logger.block('Estimating errors ...'):
-            this_i_errs = surrogate.evaluate(training_set_rank, return_all_values=True)
+        if extensions==0 or batchsize==1 or lambda_tol==0:
+            with logger.block('Estimating errors ...'):
+                this_i_errs = surrogate.evaluate(training_set_rank, return_all_values=True)
+        with logger.block('Determine batch ...'):
             this_i_mus = []
-
+            this_batch = []
             for i in range(batchsize):
                 max_ind = np.argmax(this_i_errs)
+                this_batch.append(max_ind)
                 if i == 0:  # only once per batch -> once every greedy iteration
                     max_err = this_i_errs[max_ind]
                     max_err_mu = training_set[max_ind]
@@ -118,9 +121,7 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
 
                 appended_mus.append(training_set[max_ind])
 
-
-        logger.info((f'Maximum error after {iterations} iterations ({extensions} '
-                     f'extensions): {max_err} (mu = {max_err_mu})'))
+        logger.info(f'Maximum error after {iterations} iterations ({extensions} extensions): {max_err} (mu = {max_err_mu})')
 
         if atol is not None and max_err <= atol:
             logger.info(f'Absolute error tolerance ({atol}) reached! Stopping extension loop.')
@@ -132,32 +133,74 @@ def weak_batch_greedy(surrogate, training_set, atol=None, rtol=None, max_extensi
             stopped = True
             break
 
-        # Stop if every extension of the batch failes
-        stopped = True
-        with logger.block('Extending in parallel...'):
-            try:
-                extensions += surrogate.extend(this_i_mus)
-                stopped = False  # At least one extension was successful
-            except ExtensionError:
-                pass
+        # Compute snapshots in parallel
+        Us = surrogate.parallel_compute(this_i_mus)
 
+        # Extend with first snapshot of the batch
+        with logger.block(f'Extending with the first of the batch...'):
+            successful_first = surrogate.extend_U(Us[0])
+            already_used = [0]
+            
+        if not successful_first:
+            stopped = True
+            break
+
+        extensions += 1
         iterations += 1
 
-        logger.info('')
+        # Try the rest of the batch
+        if lambda_tol > 0:
+            with logger.block(f'Extending with the rest of the batch...'):
+                for batch_extensions in range(1,batchsize):
+                    with logger.block('Estimating errors ...'):
+                        this_i_errs = surrogate.evaluate(training_set_rank, return_all_values=True)
+                        batch_errs = this_i_errs[this_batch]
+                        # Set errors to zero if snapshots was already added
+                        batch_errs[already_used] = 0
+                        max_err = np.max(this_i_errs)
+                        max_ind = np.argmax(batch_errs)
+                        max_batch_err = batch_errs[max_ind]
 
+                        if atol is not None and max_err <= atol:
+                            logger.info(f'Absolute error tolerance ({atol}) reached! Stopping extension loop.')
+                            stopped = True
+                            break
+
+                        if rtol is not None and max_err / max_errs_iter[0] <= rtol:
+                            logger.info(f'Relative error tolerance ({rtol}) reached! Stopping extension loop.')
+                            stopped = True
+                            break
+
+                        # lambda_criteria
+                        if max_batch_err >= lambda_tol*max_err:
+                            successful = surrogate.extend_U(Us[max_ind])
+                            already_used.append(max_ind)
+                            extensions += successful
+                        else:
+                            successful = False
+                    if successful:
+                        continue
+                    break
+        else:
+            with logger.block(f'Extending with the rest of the batch without bulk criteria...'):
+                for batch_extensions in range(1,batchsize):
+                    successful_extension = surrogate.extend_U(Us[batch_extensions])
+                    extensions += successful_extension
+                    
+        logger.info('')
         if max_extensions is not None and extensions >= max_extensions:
             logger.info(f'Maximum number of {max_extensions} extensions reached.')
             stopped = True
             break
 
     toc = time.perf_counter()
-    logger.info(f'Greedy search took {toc - tic} seconds')
-    times = surrogate.times
-    times['greedy'] = toc - tic
+    logger.info(f'Greedy search took {toc - tic} seconds with an effective batch size of {1.*extensions/iterations}.')
+    timings = surrogate.times
+    timings['greedy'] = toc - tic
     return {'max_errs_iter': max_errs_iter, 'max_err_mus_iter': max_err_mus_iter,
             'max_errs_ext': max_errs_ext, 'max_err_mus_ext': max_err_mus_ext,
             'extensions': extensions, 'iterations': iterations,
-            'times': times}
+            'timings': timings}
 
 
 class WeakGreedySurrogate(BasicObject):
@@ -190,7 +233,7 @@ class WeakGreedySurrogate(BasicObject):
 
 def rb_batch_greedy(fom, reductor, training_set, use_error_estimator=True, error_norm=None,
                     atol=None, rtol=None, max_extensions=None, extension_params=None, pool=None,
-                    batchsize=None):
+                    batchsize=None, greedy_start=None, lambda_tol=0.5):
     """Weak Greedy basis generation using the RB approximation error as surrogate.
 
     This algorithm generates a reduced basis using the :func:`weak greedy <weak_greedy>`
@@ -255,9 +298,8 @@ def rb_batch_greedy(fom, reductor, training_set, use_error_estimator=True, error
     surrogate = RBSurrogate(fom, reductor, use_error_estimator, error_norm,
                             extension_params, pool or dummy_pool)
 
-    result = weak_batch_greedy(surrogate, training_set, atol=atol, rtol=rtol,
-                               max_extensions=max_extensions, pool=pool,
-                               batchsize=batchsize)
+    result = weak_batch_greedy(surrogate, training_set, atol=atol, rtol=rtol, max_extensions=max_extensions, pool=pool,
+                               batchsize=batchsize, greedy_start=greedy_start, lambda_tol=lambda_tol)
     result['rom'] = surrogate.rom
     result['greedytimes'] = surrogate.times
 
@@ -352,6 +394,47 @@ class RBSurrogate(WeakGreedySurrogate):
         self.times['reduce'] += toc - tic
 
         return successful_extensions
+    
+    def extend_U(self, U):
+        if len(U) != 1:
+            print(f"len(U): {len(U)}")
+            print(U)
+        assert len(U)==1
+        tic = time.perf_counter()
+        successful = False
+        with self.logger.block('Extending basis with solution snapshot ...'):
+            extension_params = self.extension_params
+            try:
+                self.reductor.extend_basis(U, copy_U=False, **(extension_params or {}))
+                successful = True
+            except ExtensionError:
+                self.logger.info('Extension failed.')
+        toc = time.perf_counter()
+        self.times['extend'] += toc -tic
+
+        if successful:
+            tic = time.perf_counter()
+            if not self.use_error_estimator:
+                self.remote_reductor = self.pool.push(self.reductor)
+            with self.logger.block('Reducing ...'):
+                self.rom = self.reductor.reduce()
+            toc = time.perf_counter()
+            self.times['reduce'] += toc - tic
+
+        return successful
+    
+    def parallel_compute(self, mu):
+        mus = mu if isinstance(mu, list) else [mu]
+        if len(mus) == 1:
+            msg = f'Computing solution snapshot for mu = {mus[0]} ...'
+        else:
+            msg = f'Computing solution snapshots for mu = {", ".join(str(mu) for mu in mus)} ...'
+        tic = time.perf_counter()
+        with self.logger.block(msg):
+            Us = self.pool.map(_parallel_solve, mus, fom=self.remote_fom)
+        toc = time.perf_counter()
+        self.times['solve'] += toc - tic
+        return Us
 
 
 def _rb_surrogate_evaluate(rom=None, fom=None, reductor=None, mus=None, error_norm=None,
