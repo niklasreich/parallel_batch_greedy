@@ -3,7 +3,7 @@
 This repository includes the code to reproduce the results of the paper
 
 *"A parallel batch greedy algorithm in reduced basis methods: Convergence rates and numerical results"*,  
-Niklas Reich, Karsten Urban, Jürgen Vorloeper, 2024.  
+Niklas Reich, Karsten Urban, Jürgen Vorloeper, 2025.  
 arXiv: https://arxiv.org/abs/2407.11631  
 doi: https://doi.org/10.48550/arXiv.2407.11631
 
@@ -11,11 +11,10 @@ doi: https://doi.org/10.48550/arXiv.2407.11631
 
 This code is built upon [pyMOR](https://pymor.org/) and therefore includes a full pyMOR distribution.
 
-The authors of this repository created/adapted the followoing files:
+The authors of this repository created the following files:
 
 * src/batchgreedydemos/thermalblock.py
 * src/pymor/algorithms/batchgreedy.py
-* src/bindings/scipy.py
 
 See these files for more information.
 
@@ -51,9 +50,7 @@ See these files for more information.
 #### src/batchgreedydemos/thermalblock.py
 Implementation of the model problem introduced in the paper. Arguments allow to vary the number of blocks in the domain, as well as the number of discrete values per block for the thermal conductivity. This file is meant to be executed (see below).
 #### src/pymor/algorithms/batchgreedy.py
-Implementation of the parallel batch greedy algorithm as presented in the paper (see Algorithm 3).
-#### src/bindings/scipy.py
-Small adaption to make the use of *UMFPACK* possible (see below for details).
+Implementation of the parallel batch greedy algorithm as presented in the paper (see Algorithm 3 an 4).
 
 ### Other files
 All other code files stem from the used pyMOR distribution. We refer to the [official documentation](https://docs.pymor.org/2024-1-0/index.html).
@@ -70,7 +67,7 @@ To install this software, clone this repository or download it. When you have na
 to install all the necessary packages to run the code.  
 
 ### Optional Packages
-To reproduce the results of the paper, you need to install two additional optional software components/packages.
+To reproduce the results of the paper, you need to install optional software components/packages.
 
 #### MPI & mpi4py
 [MPI](https://www.mpi-forum.org/) is needed to compute the batch in parallel, as intended. For more information on how to install MPI see [here](https://docs.open-mpi.org/en/v5.0.x/installing-open-mpi/quickstart.html). For many Linux distributions, it is already installed.  
@@ -78,16 +75,13 @@ To use MPI with Python we need an interface from the mpi4py package that can be 
 
     pip install mpi4py
 
-#### SuiteSparse & scikit-umfpack
-[SuiteSparse](https://people.engr.tamu.edu/davis/suitesparse.html) is "a suite of sparse matrix algorithms". Among others, it includes *UMFPACK*, a multifrontal LU factorization. This implementation can be used instead of the standard implementation of `splu` by SciPy. How SuiteSparse & scikit-umfpack can be installed is described [here](https://scikit-umfpack.github.io/scikit-umfpack/install.html). If the software is installed correctly, the UMFPACK-implementation is used automatically.
-
 ## Start the Benchmark
 
 The benchmark problem that is described in the paper is found within the file `src/batchgreedydemos/thermalblock.py`. After navigating to the directory `src/batchgreedydemos/`, execute the code with
 
-    python thermalblock.py [xblocks] [yblocks] [snapshots] [batchsize]
+    python thermalblock.py [xblocks] [yblocks] [snapshots] [batchsize] [use_pod] [lambda_tol]
 
-Here `[xblocks]` is the number of blocks in x direction, `[yblocks]` is the number of blocks in y direction, `[snapshots]` is the number of discrete values per block for the thermal conductivity, and `[batchsize]` is the batch size of the parallel greedy algorithm. By setting `[batchsize]` to `1` we get a classical weak greedy algorithm.
+Here `[xblocks]` is the number of blocks in x direction, `[yblocks]` is the number of blocks in y direction, `[snapshots]` is the number of discrete values per block for the thermal conductivity, and `[batchsize]` is the batch size of the parallel greedy algorithm. By setting `[batchsize]` to `1` we get a classical weak greedy algorithm. By setting `[use_pod]` to `1` the POD-variant of the batch greedy alorithm is selected; with `0` the bulk version is used. For the POD version `lambda_tol` sets the relative tolerance for POD; otherwise `lambda_tol` is the bulk parameter.
 
 When the code runs successfully, it will output a text-based summary at the end, which sums up the used configuration as well as the results.
 
@@ -99,23 +93,21 @@ where `[numproc]` is the number of workers.
 
 To give a concrete example, the results of the paper were created by executing
 
-    mpiexec -n 30 python thermalblock.py 2 2 25 [batchsize]
+    mpiexec -n 30 python thermalblock.py 2 2 25 30 [use_pod] [lambda_tol]
 <!-- tsk -->
-    mpiexec -n 30 python thermalblock.py 3 3 5 [batchsize]
+    mpiexec -n 30 python thermalblock.py 2 3 10 30 [use_pod] [lambda_tol]
     
-
-and `[batchsize]` was set to `1`, ... , `16`, respectively.
 
 ### Smaller Test configuration
 
 If you just want to make sure that the code runs, you can use
 
-    python thermalblock.py [xblocks] [yblocks] [snapshots] [batchsize] --test-config
+    python thermalblock.py [xblocks] [yblocks] [snapshots] [batchsize] [use_pod] [lambda_tol] --test-config
 
 This changes some otherwise static parameters[^1], so that the benchmark finishes much faster.
 For example
 
-    python thermalblock.py 2 2 5 3 --test-config
+    python thermalblock.py 2 2 5 3 [use_pod] [lambda_tol] --test-config
 
 should finish in under a minute.
 
