@@ -14,16 +14,17 @@ from pymor.parallel.dummy import dummy_pool
 from pymor.parallel.interface import RemoteObject
 
 
-def weak_batch_greedy_with_bulk(surrogate, training_set, atol=None, rtol=None, max_extensions=None, pool=None,
+def weak_batch_greedy_bulk(surrogate, training_set, atol=None, rtol=None, max_extensions=None, pool=None,
                       batchsize=None, lambda_tol=0.5):
-    """Weak greedy basis generation algorithm :cite:`BCDDPW11`.
+    """Weak batch greedy basis generation with bulk criterion.
 
     This algorithm generates an approximation basis for a given set of vectors
     associated with a training set of parameters by iteratively evaluating a
     :class:`surrogate <WeakGreedySurrogate>` for the approximation error on
-    the training set and adding the worst approximated vector (according to
-    the surrogate) to the basis. Compared to the standard greedy algorithm a whole
-    batch of paramters are added to the basis in every greedy iteration.
+    the training set and selecting the `batchsize` worst approximated vectors
+    (according to the surrogate). After the parallel computation of these vectors
+    they are added to the basis if they fulfill a bulk criterion for the current
+    reduced space.
 
     The constructed basis is extracted from the surrogate after termination
     of the algorithm.
@@ -49,6 +50,10 @@ def weak_batch_greedy_with_bulk(surrogate, training_set, atol=None, rtol=None, m
         needs to be supported by `surrogate`.
     batchsize
         Size of the batch that is used within the greedy algorithm.
+    batchsize
+        Number of snapshots that are selected at once and computed in parallel.
+    lambda_tol
+        Parameter for the bulk criterion.
 
     Returns
     -------
@@ -65,7 +70,7 @@ def weak_batch_greedy_with_bulk(surrogate, training_set, atol=None, rtol=None, m
         :time:                   Splits of the runtime of the algorithm.
     """
 
-    # if no batchsize is given do classical greedy with batch size 1
+    # if no batchsize is given do classical weak greedy with batch size 1
     if batchsize is None:
         batchsize = 1
 
@@ -171,7 +176,7 @@ def weak_batch_greedy_with_bulk(surrogate, training_set, atol=None, rtol=None, m
                             stopped = True
                             break
 
-                        # lambda_criteria
+                        # Bulk criterion
                         if max_batch_err >= lambda_tol*max_err:
                             successful = surrogate.extend_U(Us[max_ind])
                             already_used.append(max_ind)
@@ -204,13 +209,15 @@ def weak_batch_greedy_with_bulk(surrogate, training_set, atol=None, rtol=None, m
 
 def weak_batch_greedy_pod(surrogate, training_set, atol=None, rtol=None, max_extensions=None, pool=None,
                       batchsize=None, lambda_tol=0.5):
-    """Weak greedy basis generation algorithm :cite:`BCDDPW11`.
+    """Weak batch greedy basis generation with POD.
 
     This algorithm generates an approximation basis for a given set of vectors
     associated with a training set of parameters by iteratively evaluating a
     :class:`surrogate <WeakGreedySurrogate>` for the approximation error on
-    the training set and adding the worst approximated vector (according to
-    the surrogate) to the basis.
+    the training set and selecting the `batchsize` worst approximated vectors
+    (according to the surrogate). After the parallel computation of these vectors
+    a POD with relative tolerance `lambda_tol` is performed on (the approximation
+    error of) the batch and the resultig POD-modes are added to the basis.
 
     The constructed basis is extracted from the surrogate after termination
     of the algorithm.
@@ -234,6 +241,10 @@ def weak_batch_greedy_pod(surrogate, training_set, atol=None, rtol=None, max_ext
     pool
         If not `None`, a |WorkerPool| to use for parallelization. Parallelization
         needs to be supported by `surrogate`.
+    batchsize
+        Number of snapshots that are selected at once and computed in parallel.
+    lambda_tol
+        Relative tolerance for the POD of the batch.
 
     Returns
     -------
@@ -245,6 +256,7 @@ def weak_batch_greedy_pod(surrogate, training_set, atol=None, rtol=None, max_ext
         :time:                   Total runtime of the algorithm.
     """
 
+    # if no batchsize is given do classical weak greedy with batch size 1
     if batchsize is None:
         batchsize = 1
 
@@ -258,7 +270,6 @@ def weak_batch_greedy_pod(surrogate, training_set, atol=None, rtol=None, max_ext
         return {'max_errs': [], 'max_err_mus': [], 'extensions': 0,
                 'time': time.perf_counter() - tic_greedy}
 
-    # parallel_batch = False
     if pool is None:
         pool = dummy_pool
 
@@ -275,7 +286,6 @@ def weak_batch_greedy_pod(surrogate, training_set, atol=None, rtol=None, max_ext
 
     stopped = False
     while not stopped:
-        # if extensions==0 or batchsize==1 or lambda_tol==0:
         with logger.block('Estimating errors ...'):
             this_i_errs = surrogate.evaluate(training_set_rank, return_all_values=True)
         with logger.block('Determine batch ...'):
@@ -318,7 +328,7 @@ def weak_batch_greedy_pod(surrogate, training_set, atol=None, rtol=None, max_ext
         for i in range(1,len(Us)):
             Us_vec.append(Us[i])
 
-        # Extend with first snapshot of the batch
+        # Perform POD on (the approximation error of) the batch
         tic = time.perf_counter()
         with logger.block(f'Extending with POD of the batch...'):
             extension_params = {'method': 'pod', 'pod_modes': None}
@@ -386,12 +396,12 @@ class WeakGreedySurrogate(BasicObject):
 def rb_batch_greedy(fom, reductor, training_set, use_error_estimator=True, error_norm=None,
                     atol=None, rtol=None, max_extensions=None, extension_params=None, pool=None,
                     batchsize=None, use_POD=False, lambda_tol=0.5):
-    """Weak Greedy basis generation using the RB approximation error as surrogate.
+    """Weak Batch Greedy basis generation using the RB approximation error as surrogate.
 
-    This algorithm generates a reduced basis using the :func:`weak greedy <weak_greedy>`
-    algorithm :cite:`BCDDPW11`, where the approximation error is estimated from computing
-    solutions of the reduced order model for the current reduced basis and then estimating
-    the model reduction error.
+    This algorithm generates a reduced basis using the :func:`weak greedy batch greedy bulk
+    <weak_batch_greedy_bulk>` or the :func:`weak greedy batch greedy pod <weak_batch_greedy_pod>`,
+    where the approximation error is estimated from computing solutions of the reduced order model
+    for the current reduced basis and then estimating the model reduction error.
 
     Parameters
     ----------
@@ -415,11 +425,11 @@ def rb_batch_greedy(fom, reductor, training_set, use_error_estimator=True, error
         If `use_error_estimator` is `False`, use this function to calculate the
         norm of the error. If `None`, the Euclidean norm is used.
     atol
-        See :func:`weak_greedy`.
+        See :func:`weak_batch_greedy_bulk` or :func:`weak_batch_greedy_pod`.
     rtol
-        See :func:`weak_greedy`.
+        See :func:`weak_batch_greedy_bulk` or :func:`weak_batch_greedy_pod`.
     max_extensions
-        See :func:`weak_greedy`.
+        See :func:`weak_batch_greedy_bulk` or :func:`weak_batch_greedy_pod`.
     extension_params
         `dict` of parameters passed to the `reductor.extend_basis` method.
         If `None`, `'gram_schmidt'` basis extension will be used as a default
@@ -427,9 +437,13 @@ def rb_batch_greedy(fom, reductor, training_set, use_error_estimator=True, error
         and `'pod'` basis extension (adding a single POD mode) for instationary
         problems.
     pool
-        See :func:`weak_greedy`.
+        See :func:`weak_batch_greedy_bulk` or :func:`weak_batch_greedy_pod`.
     batchsize
         Size of the batch that is used within the greedy algorithm.
+    use_POD
+        If `True` use :func:`weak_batch_greedy_pod` and :func:`weak_batch_greedy_bulk` otherwise.
+    lambda_tol
+        See :func:`weak_batch_greedy_bulk` or :func:`weak_batch_greedy_pod`.
 
     Returns
     -------
@@ -454,7 +468,7 @@ def rb_batch_greedy(fom, reductor, training_set, use_error_estimator=True, error
         result = weak_batch_greedy_pod(surrogate, training_set, atol=atol, rtol=rtol, max_extensions=max_extensions, pool=pool,
                                 batchsize=batchsize, lambda_tol=lambda_tol)
     else:
-        result = weak_batch_greedy_with_bulk(surrogate, training_set, atol=atol, rtol=rtol, max_extensions=max_extensions, pool=pool,
+        result = weak_batch_greedy_bulk(surrogate, training_set, atol=atol, rtol=rtol, max_extensions=max_extensions, pool=pool,
                                 batchsize=batchsize, lambda_tol=lambda_tol)
     result['rom'] = surrogate.rom
     result['greedytimes'] = surrogate.times
