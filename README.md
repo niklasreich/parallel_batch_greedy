@@ -3,7 +3,7 @@
 This repository includes the code to reproduce the results of the paper
 
 *"A parallel batch greedy algorithm in reduced basis methods: Convergence rates and numerical results"*,  
-Niklas Reich, Karsten Urban, Jürgen Vorloeper, 2025.  
+Niklas Reich, Karsten Urban, Jürgen Vorloeper, 2024 (current version: 2025).  
 arXiv: https://arxiv.org/abs/2407.11631  
 doi: https://doi.org/10.48550/arXiv.2407.11631
 
