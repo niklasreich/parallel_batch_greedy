@@ -1,34 +1,29 @@
-![pyMOR Logo](./logo/pymor_logo.svg)
+# Parallel Batch Greedy Algorithm
 
-pyMOR - Model Order Reduction with Python
-=========================================
+This repository includes the code to reproduce the results of the paper
 
-pyMOR is a software library for building model order
-reduction applications with the Python programming language. Implemented
-algorithms include reduced basis methods for parametric linear and non-linear
-problems, as well as system-theoretic methods such as balanced truncation or
-IRKA (Iterative Rational Krylov Algorithm).  All algorithms in pyMOR are
-formulated in terms of abstract interfaces for seamless integration with
-external PDE (Partial Differential Equation) solver packages.  Moreover, pure
-Python implementations of FEM (Finite Element Method) and FVM (Finite Volume
-Method) discretizations using the NumPy/SciPy scientific computing stack are
-provided for getting started quickly.
+*"A parallel batch greedy algorithm in reduced basis methods: Convergence rates and numerical results"*,  
+Niklas Reich, Karsten Urban, Jürgen Vorloeper, 2024.  
+arXiv: https://arxiv.org/abs/2407.11631  
+doi: https://doi.org/10.48550/arXiv.2407.11631
 
-[![PyPI](https://img.shields.io/pypi/pyversions/pymor.svg)](https://pypi.python.org/pypi/pymor)
-[![PyPI](https://img.shields.io/pypi/v/pymor.svg)](https://pypi.python.org/pypi/pymor)
-[![Docs](https://img.shields.io/endpoint?url=https%3A%2F%2Fdocs.pymor.org%2Fbadge.json)](https://docs.pymor.org/)
-[![DOI](https://zenodo.org/badge/9220688.svg)](https://zenodo.org/badge/latestdoi/9220688)
-[![GitLab Pipeline](https://zivgitlab.uni-muenster.de/pymor/pymor/badges/main/pipeline.svg)](https://zivgitlab.uni-muenster.de/pymor/pymor/commits/main)
-[![Conda Tests](https://github.com/pymor/pymor/actions/workflows/conda_tests.yml/badge.svg)](https://github.com/pymor/pymor/actions/workflows/conda_tests.yml)
-[![codecov](https://codecov.io/gh/pymor/pymor/branch/main/graph/badge.svg)](https://codecov.io/gh/pymor/pymor)
+## License
 
-License
--------
+This code is built upon [pyMOR](https://pymor.org/) and therefore includes a full pyMOR distribution.
+
+The authors of this repository created/adapted the followoing files:
+
+* src/batchgreedydemos/thermalblock.py
+* src/pymor/algorithms/batchgreedy.py
+* src/bindings/scipy.py
+
+See these files for more information.
+
+### pyMOR License
 
 Copyright pyMOR developers and contributors. All rights reserved.
 
-Redistribution and use in source and binary forms, with or without modification, are permitted provided that the
-following conditions are met:
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
 
 * Redistributions of source code must retain the above copyright notice, this list of conditions and the following
   disclaimer.
@@ -50,167 +45,81 @@ The following files contain source code originating from other open source softw
 
 See these files for more information.
 
-Citing
-------
+## Desciption of Code
 
-If you use pyMOR for academic work, please consider citing our
-[publication](https://doi.org/10.1137/15M1026614):
+### Changed & Created Files
+#### src/batchgreedydemos/thermalblock.py
+Implementation of the model problem introduced in the paper. Arguments allow to vary the number of blocks in the domain, as well as the number of discrete values per block for the thermal conductivity. This file is meant to be executed (see below).
+#### src/pymor/algorithms/batchgreedy.py
+Implementation of the parallel batch greedy algorithm as presented in the paper (see Algorithm 3).
+#### src/bindings/scipy.py
+Small adaption to make the use of *UMFPACK* possible (see below for details).
 
-    R. Milk, S. Rave, F. Schindler
-    pyMOR - Generic Algorithms and Interfaces for Model Order Reduction
-    SIAM J. Sci. Comput., 38(5), pp. S194--S216, 2016
+### Other files
+All other code files stem from the used pyMOR distribution. We refer to the [official documentation](https://docs.pymor.org/2024-1-0/index.html).
 
-Installation via pip
---------------------
+## Installation
+### Necessary Packages
 
-We recommend installation of pyMOR in a [virtual environment](https://virtualenv.pypa.io/en/latest/).
+This software has been developed with Python 3.10.
+We recommend an installation via [pip](https://pip.pypa.io/en/stable/) in a [virtual environment](https://virtualenv.pypa.io/en/latest/).
+To install this software, clone this repository or download it. When you have navigated to the top level of your local copy, use
 
-pyMOR can easily be installed with the [pip](https://pip.pypa.io/en/stable/)
-command:
+    pip install -e .
 
-    pip install --upgrade pip  # make sure that pip is reasonably new
-    pip install pymor[full]
+to install all the necessary packages to run the code.  
 
-(Please note that pip versions prior to 21.1 might have problems resolving all dependencies)
+### Optional Packages
+To reproduce the results of the paper, you need to install two additional optional software components/packages.
 
-This will install the latest release of pyMOR on your system with most optional
-dependencies.
-For Linux we provide binary wheels, so no further system packages should
-be required. Use
+#### MPI & mpi4py
+[MPI](https://www.mpi-forum.org/) is needed to compute the batch in parallel, as intended. For more information on how to install MPI see [here](https://docs.open-mpi.org/en/v5.0.x/installing-open-mpi/quickstart.html). For many Linux distributions, it is already installed.  
+To use MPI with Python we need an interface from the mpi4py package that can be installed via
 
-    pip install pymor
+    pip install mpi4py
 
-for an installation with minimal dependencies.
-There are some optional packages not included with `pymor[full]`
-because they need additional setup on your system:
+#### SuiteSparse & scikit-umfpack
+[SuiteSparse](https://people.engr.tamu.edu/davis/suitesparse.html) is "a suite of sparse matrix algorithms". Among others, it includes *UMFPACK*, a multifrontal LU factorization. This implementation can be used instead of the standard implementation of `splu` by SciPy. How SuiteSparse & scikit-umfpack can be installed is described [here](https://scikit-umfpack.github.io/scikit-umfpack/install.html). If the software is installed correctly, the UMFPACK-implementation is used automatically.
 
-* for support of MPI distributed models and parallelization of greedy algorithms
-  (requires MPI development headers and a C compiler):
+## Start the Benchmark
 
-      pip install mpi4py
+The benchmark problem that is described in the paper is found within the file `src/batchgreedydemos/thermalblock.py`. After navigating to the directory `src/batchgreedydemos/`, execute the code with
 
-* dense matrix equation solver for system-theoretic MOR methods, required for
-  H-infinity norm calculation (requires OpenBLAS headers and a Fortran
-  compiler):
+    python thermalblock.py [xblocks] [yblocks] [snapshots] [batchsize]
 
-      pip install slycot
+Here `[xblocks]` is the number of blocks in x direction, `[yblocks]` is the number of blocks in y direction, `[snapshots]` is the number of discrete values per block for the thermal conductivity, and `[batchsize]` is the batch size of the parallel greedy algorithm. By setting `[batchsize]` to `1` we get a classical weak greedy algorithm.
 
-* dense and sparse matrix equation solver for system-theoretic MOR methods
-  (other backends available):
-  * from [source](https://gitlab.mpi-magdeburg.mpg.de/mess/cmess-releases)
-    (recommended)
-  * using a [wheel](https://www.mpi-magdeburg.mpg.de/projects/mess)
+When the code runs successfully, it will output a text-based summary at the end, which sums up the used configuration as well as the results.
 
-If you are not operating in a virtual environment, you can pass the optional `--user`
-argument to pip. pyMOR will then only be installed for your
-local user, not requiring administrator privileges.
+If you have MPI installed, you can leverage a parallel worker pool by executing
 
-To install the latest development version of pyMOR, execute
+    mpiexec -n [numproc] python thermalblock.py [xblocks] [yblocks] [snapshots] [batchsize]
 
-    pip install git+https://github.com/pymor/pymor#egg=pymor[full]
+where `[numproc]` is the number of workers.
 
-which will require that the [git](https://git-scm.com/) version control system is
-installed on your system.
+To give a concrete example, the results of the paper were created by executing
 
-From time to time, the main branch of pyMOR undergoes major changes and things
-might break (this is usually announced in our [discussion forum](https://github.com/pymor/pymor/discussions)),
-so you might prefer to install pyMOR from the current release branch:
+    mpiexec -n 30 python thermalblock.py 2 2 25 [batchsize]
+<!-- tsk -->
+    mpiexec -n 30 python thermalblock.py 3 3 5 [batchsize]
+    
 
-    pip install git+https://github.com/pymor/pymor@2022.1.x#egg=pymor[full]
+and `[batchsize]` was set to `1`, ... , `16`, respectively.
 
-Release branches will always stay stable and will only receive bugfix commits
-after the corresponding release has been made.
+### Smaller Test configuration
 
-Installation via conda
-----------------------
+If you just want to make sure that the code runs, you can use
 
-pyMOR can be installed using `conda` by running
+    python thermalblock.py [xblocks] [yblocks] [snapshots] [batchsize] --test-config
 
-    conda install -c conda-forge pymor
+This changes some otherwise static parameters[^1], so that the benchmark finishes much faster.
+For example
 
-Documentation
--------------
+    python thermalblock.py 2 2 5 3 --test-config
 
-Documentation is available [online](https://docs.pymor.org/)
-or you can build it yourself from inside the root directory of the pyMOR source tree
-by executing:
+should finish in under a minute.
 
-    make docs
+Of course, when using the test configuration, the results are not related to the results 
+presented in the paper.
 
-This will generate HTML documentation in `docs/_build/html`.
-
-Useful Links
-------------
-
-* [Latest Changelog](https://docs.pymor.org/latest/release_notes/all.html)
-* [Getting Started](https://docs.pymor.org/latest/getting_started.html)
-* [Dependencies](https://github.com/pymor/pymor/blob/2022.1.x/requirements.txt)
-
-External PDE solvers
---------------------
-
-pyMOR has been designed with easy integration of external PDE solvers
-in mind.
-
-A basic approach is to use the solver only to generate high-dimensional
-system matrices which are then read by pyMOR from disk (`pymor.discretizers.disk`).
-Another possibility is to steer the solver via an appropriate network
-protocol.
-
-Whenever possible, we recommend to recompile the solver as a
-Python extension module which gives pyMOR direct access to the solver without
-any communication overhead. A basic example using
-[pybind11](https://github.com/pybind/pybind11) can be found in
-`src/pymordemos/minimal_cpp_demo`. Moreover,
-we provide bindings for the following solver libraries:
-
-* [FEniCS](https://fenicsproject.org)
-
-    MPI-compatible wrapper classes for dolfin linear algebra data structures are
-    shipped with pyMOR (`pymor.bindings.fenics`).
-    For an example see `pymordemos.thermalblock`, `pymordemos.thermalblock_simple`.
-    It is tested using FEniCS version 2019.1.0.
-
-* [deal.II](https://dealii.org)
-
-    Python bindings and pyMOR wrapper classes can be found
-    [here](https://github.com/pymor/pymor-deal.II).
-
-* [NGSolve](https://ngsolve.org)
-
-    Wrapper classes for the NGSolve finite element library are shipped with pyMOR
-    (`pymor.bindings.ngsolve`).
-    For an example see `pymordemos.thermalblock_simple`.
-    It is tested using NGSolve version v6.2.2104.
-
-Do not hesitate to contact
-[us](https://github.com/pymor/pymor/discussions) if you
-need help with the integration of your PDE solver.
-
-External Matrix Equation Solvers
---------------------------------
-
-pyMOR also provides bindings to matrix equation solvers (in `pymor.bindings`),
-which are needed for the system-theoretic methods and need to be installed
-separately. Bindings for the following solver libraries are included:
-
-* [Py-M.E.S.S.](https://www.mpi-magdeburg.mpg.de/projects/mess)
-
-    The Matrix Equation Sparse Solver library is intended for solving large sparse matrix equations (`pymor.bindings.pymess`).
-
-* [Slycot](https://github.com/python-control/Slycot)
-
-    Python wrapper for the Subroutine Library in Systems and Control Theory (SLICOT) is also used for Hardy norm computations (`pymor.bindings.slycot`).
-
-Environments for pyMOR Development and Tests
------------------------------------------------
-
-Please see the [Developer Documentation](https://docs.pymor.org/latest/developer_docs.html).
-
-Contact
--------
-
-Should you have any questions regarding pyMOR or wish to contribute,
-do not hesitate to contact us via our GitHub discussions forum:
-
-<https://github.com/pymor/pymor/discussions>
+[^1]: The order of the full model is reduced (coarser spatial discretization), the size of the test set for the error analysis is reduced, and the size of the test set for the benchmarking of the reduced model is lowered.

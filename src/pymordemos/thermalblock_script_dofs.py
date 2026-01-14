@@ -29,7 +29,8 @@ def main(
              '(in total SNAPSHOTS^(XBLOCKS * YBLOCKS) parameters).\n\n'
              'adaptive_greedy: size of validation set.\n\n'
     ),
-    batchsize: int = Argument(..., help='Size of the (parallel) batch in each greedy iteration.')
+    batchsize: int = Argument(..., help='Size of the (parallel) batch in each greedy iteration.'),
+    grid: int = Argument(..., help='Number of grid points per dim.')
 ):
     """Thermalblock demo."""
 
@@ -43,10 +44,10 @@ def main(
     assert batchsize>=0, 'Batch size must be nonnegative.'
     if batchsize==0: batchsize = len(pool)
 
-    grid = 36
-    rb_size = 100
+    lambda_tol = 0.01
+    rb_size = 300
     rtol = 1e-5
-    test_snapshots = 100
+    test_snapshots = 1
 
     tic = time.perf_counter()
 
@@ -54,90 +55,76 @@ def main(
 
     parameter_space = fom.parameters.space(0.1, 1.)
 
-    n_test = 500
-    test_mus = parameter_space.sample_randomly(n_test)
+    fom.enable_caching('memory')
 
-    tic = time.perf_counter()
-    U = fom.solution_space.empty()
-    for mu in test_mus:
-        U.append(fom.solve(mu))
+    print('')
+    print('')
+    print('RB generation for batch size ' + str(batchsize) + ' ...')
+
+    # define estimator for coercivity constant
+    from pymor.parameters.functionals import ExpressionParameterFunctional
+    coercivity_estimator = ExpressionParameterFunctional('min(diffusion)', fom.parameters)
+
+    # inner product for computation of Riesz representatives
+    product = fom.h1_0_semi_product
+
+    from pymor.reductors.coercive import SimpleCoerciveRBReductor
+    reductor = SimpleCoerciveRBReductor(fom, product=product, coercivity_estimator=coercivity_estimator,
+                                        check_orthonormality=False)
+    
+    training_set = parameter_space.sample_uniformly(snapshots)
+    greedy_data = rb_batch_greedy(fom, reductor, training_set,
+                                  use_error_estimator=True,
+                                  error_norm=fom.h1_0_semi_norm,
+                                  max_extensions=rb_size,
+                                  pool=pool,
+                                  batchsize=batchsize,
+                                  rtol=rtol,
+                                  lambda_tol=lambda_tol,
+                                  )
+
     toc = time.perf_counter()
+    offline_time = toc - tic
 
-    calctime = (toc - tic)/n_test
-
-    print(f'Time: {calctime} [s]')
-
-    # fom.enable_caching('memory')
-
-    # print('')
-    # print('')
-    # print('RB generation for batch size ' + str(batchsize) + ' ...')
-
-    # # define estimator for coercivity constant
-    # from pymor.parameters.functionals import ExpressionParameterFunctional
-    # coercivity_estimator = ExpressionParameterFunctional('min(diffusion)', fom.parameters)
-
-    # # inner product for computation of Riesz representatives
-    # product = fom.h1_0_semi_product
-
-    # reductor_str = 'traditional'
-    # if reductor_str == 'residual_basis':
-    #     from pymor.reductors.coercive import CoerciveRBReductor
-    #     reductor = CoerciveRBReductor(fom, product=product, coercivity_estimator=coercivity_estimator,
-    #                                     check_orthonormality=False)
-    # elif reductor_str == 'traditional':
-    #     from pymor.reductors.coercive import SimpleCoerciveRBReductor
-    #     reductor = SimpleCoerciveRBReductor(fom, product=product, coercivity_estimator=coercivity_estimator,
-    #                                         check_orthonormality=False)
-    # else:
-    #     assert False  # this should never happen
+    rom = greedy_data['rom']
     
-    # training_set = parameter_space.sample_uniformly(snapshots)
-    # greedy_data = rb_batch_greedy(fom, reductor, training_set,
-    #                               use_error_estimator=True,
-    #                               error_norm=fom.h1_0_semi_norm,
-    #                               max_extensions=rb_size,
-    #                               pool=pool,
-    #                               batchsize=batchsize,
-    #                               rtol=rtol,
-    #                               postprocessing=True
-    #                               )
+    test_sample = parameter_space.sample_randomly(test_snapshots)
+    results = reduction_error_analysis(rom,
+                                       fom=fom,
+                                       reductor=reductor,
+                                       error_estimator=True,
+                                       error_norms=(fom.h1_0_semi_norm, fom.l2_norm),
+                                       error_estimator_norm_index=0,
+                                       test_mus=test_sample,
+                                       basis_sizes=0,
+                                       pool=None
+                                       )
 
-    # toc = time.perf_counter()
-    # offline_time = toc - tic
-
-    # rom = greedy_data['rom']
+    # Online time
+    n_online = 500
+    tic = time.perf_counter()
+    for mu in parameter_space.sample_randomly(n_online):
+        reductor.reconstruct(rom.solve(mu))
+    toc = time.perf_counter()
+    online_time = (toc - tic)/n_online
     
-    # test_sample = parameter_space.sample_randomly(test_snapshots)
-    # results = reduction_error_analysis(rom,
-    #                                    fom=fom,
-    #                                    reductor=reductor,
-    #                                    error_estimator=True,
-    #                                    error_norms=(fom.h1_0_semi_norm, fom.l2_norm),
-    #                                    error_estimator_norm_index=0,
-    #                                    test_mus=test_sample,
-    #                                    basis_sizes=0,
-    #                                    pool=pool
-    #                                    )
+    results['num_extensions'] = greedy_data['extensions']
+    results['num_iterations'] = greedy_data['iterations']
 
-    # # Online time
-    # n_online = 500
-    # tic = time.perf_counter()
-    # for mu in parameter_space.sample_randomly(n_online):
-    #     reductor.reconstruct(rom.solve(mu))
-    # toc = time.perf_counter()
-    # online_time = (toc - tic)/n_online
-    
-    # results['num_extensions'] = greedy_data['extensions']
-    # results['num_iterations'] = greedy_data['iterations']
-    # results['max_errs_pp'] = greedy_data['max_errs_pp']
+    results['timings'] = greedy_data['greedytimes'] 
+    results['timings']['online'] = online_time  # Specify what time is saved
+    results.pop('time', None)  # Delete old key
+    results['timings']['offline'] = offline_time # Also save offline time
 
-    # results['val_time'] = online_time  # Specify what time is saved
-    # results.pop('time', None)  # Delete old key
-    # results['calc_time'] = offline_time # Also save offline time
+    results['settings'] = {'grid': grid, 'rb_size': rb_size, 'lambda': lambda_tol, 'rtol': rtol, 'test_snapshots': test_snapshots, 'n_online': n_online}
 
-    # with open(f'thermalblock_{xblocks}x{yblocks}_N{len(pool)}_BS{batchsize}.pkl', 'wb') as fp:
-    #         pickle.dump(results, fp)
+    if batchsize==1:
+        filestring = f'thermalblock_{xblocks}x{yblocks}_B1_dofs{grid}.pkl'
+    else:
+        filestring = f'thermalblock_{xblocks}x{yblocks}_N{len(pool)}_dofs{grid}.pkl'
+
+    with open(filestring, 'wb') as fp:
+            pickle.dump(results, fp)
 
     # global test_results
     # test_results = results

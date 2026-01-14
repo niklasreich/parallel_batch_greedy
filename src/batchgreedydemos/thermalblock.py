@@ -1,21 +1,21 @@
 #!/usr/bin/env python
-# This file is part of the pyMOR project (https://www.pymor.org).
+# This file was created by Niklas Reich
+# It is an adaption of src/pymordemos/thermalblock.py
 # Copyright pyMOR developers and contributors. All rights reserved.
 # License: BSD 2-Clause License (https://opensource.org/licenses/BSD-2-Clause)
-# This file was adapted by Niklas Reich.
 
-import sys
 import time
-import pickle
-from datetime import datetime
 
 from typer import Argument, Option, run
 
-from pymor.algorithms.error import plot_reduction_error_analysis, reduction_error_analysis, plot_batch_reduction
-from pymor.core.pickle import dump
-from pymor.parallel.default import new_parallel_pool, dummy_pool
-from pymor.tools.typer import Choices
 from pymor.algorithms.batchgreedy import rb_batch_greedy
+from pymor.algorithms.error import reduction_error_analysis
+from pymor.analyticalproblems.thermalblock import thermal_block_problem
+from pymor.discretizers.builtin import discretize_stationary_cg
+from pymor.discretizers.builtin.list import convert_to_numpy_list_vector_array
+from pymor.parallel.default import new_parallel_pool, dummy_pool
+from pymor.parameters.functionals import ExpressionParameterFunctional
+from pymor.reductors.coercive import SimpleCoerciveRBReductor
 
 
 def main(
@@ -23,63 +23,64 @@ def main(
     yblocks: int = Argument(..., help='Number of blocks in y direction.'),
     snapshots: int = Argument(
         ...,
-        help='naive: ignored\n\n'
-             'greedy/pod: Number of training_set parameters per block '
-             '(in total SNAPSHOTS^(XBLOCKS * YBLOCKS) parameters).\n\n'
-             'adaptive_greedy: size of validation set.\n\n'
+        help='Number of training_set parameters per block\n\n'
     ),
-    batchsize: int = Argument(..., help='Size of the (parallel) batch in each greedy iteration.')
+    batchsize: int = Argument(..., help='Size of the (parallel) batch in each greedy iteration.'),
+    use_pod: bool = Argument(..., help='Use POD on batch or bulk criterion.'),
+    lambda_tol: float = Argument(..., help='Tolerance for rest of the batch.'),
+    test_config: bool = Option(False, help='Use test configuration or benchmark configuration.')
 ):
-    """Thermalblock demo for the parallel batch greedy algorithm."""
+    """Thermalblock script for the parallel batch greedy algorithm."""
 
+    assert batchsize>=1, 'Batch size must be a positiv integer.'
 
+    # Create a worker pool for parallel computing.
+    # Without MPI a dummy pool is created which conincides with serial computation.
     pool = new_parallel_pool(allow_mpi=True)
     if pool is not dummy_pool:
         print(f'Using pool of {len(pool)} workers for parallelization.')
     else:
-        print(f'No functional pool. Only dummy_pool is used.')
+        print('No functional pool. Only dummy_pool is used.')
 
-    assert batchsize>=0, 'Batch size must be nonnegative.'
-    if batchsize==0: batchsize = len(pool)
-
-    # static parameters
-    grid = 100
-    rb_size = 350
-    rtol = 1e-5
-    test_snapshots = 100
-    reductor_str = 'traditional'
-
+    # Static Parameters
+    # (Remain unchanged)
+    if test_config: # Small problem to test if code runs
+        grid = 100 # approx. number of nodes per dim.
+        rtol = 1e-5 # rel tolerance for the greedy algorithm.
+        rb_size = 50 # max. basis size. Chosen so big that we stop by rtol.
+        test_snapshots = 10 # number of random parameters for error analysis
+        test_online = 50 # number of random paramters for benchmarking reduced model.
+    else: # Same configuration as in the paper
+        grid = 1000 # approx. number of nodes per dim.
+        rtol = 1e-5 # rel tolerance for the greedy algorithm.
+        rb_size = 500 # max. basis size. Chosen so big that we stop by rtol.
+        test_snapshots = 100 # number of random parameters for error analysis
+        test_online = 500 # number of random paramters for benchmarking reduced model.
     tic = time.perf_counter()
 
-    fom, fom_summary = discretize_pymor(xblocks, yblocks, grid, use_list_vector_array=False)
-
-    parameter_space = fom.parameters.space(0.1, 1.)
-
-    fom.enable_caching('memory')
+    fom, _ = discretize_pymor(xblocks, yblocks, grid, use_list_vector_array=False)
+    parameter_space = fom.parameters.space(0.1, 1.) # Parameter domain
+    fom.enable_caching('memory') # Allow caching.
 
     print('')
     print('')
     print('RB generation for batch size ' + str(batchsize) + ' ...')
 
     # define estimator for coercivity constant
-    from pymor.parameters.functionals import ExpressionParameterFunctional
     coercivity_estimator = ExpressionParameterFunctional('min(diffusion)', fom.parameters)
 
     # inner product for computation of Riesz representatives
     product = fom.h1_0_semi_product
 
-    if reductor_str == 'residual_basis':
-        from pymor.reductors.coercive import CoerciveRBReductor
-        reductor = CoerciveRBReductor(fom, product=product, coercivity_estimator=coercivity_estimator,
-                                        check_orthonormality=False)
-    elif reductor_str == 'traditional':
-        from pymor.reductors.coercive import SimpleCoerciveRBReductor
-        reductor = SimpleCoerciveRBReductor(fom, product=product, coercivity_estimator=coercivity_estimator,
-                                            check_orthonormality=False)
-    else:
-        assert False  # this should never happen
-    
+    # choice of error estimator
+    reductor = SimpleCoerciveRBReductor(fom,
+                                        product=product,
+                                        coercivity_estimator=coercivity_estimator,
+                                        check_orthonormality=False
+                                        )
+
     training_set = parameter_space.sample_uniformly(snapshots)
+
     greedy_data = rb_batch_greedy(fom, reductor, training_set,
                                   use_error_estimator=True,
                                   error_norm=fom.h1_0_semi_norm,
@@ -87,15 +88,16 @@ def main(
                                   pool=pool,
                                   batchsize=batchsize,
                                   rtol=rtol,
-                                  postprocessing=True
+                                  use_POD=use_pod,
+                                  lambda_tol=lambda_tol
                                   )
 
     toc = time.perf_counter()
     offline_time = toc - tic
 
     rom = greedy_data['rom']
-    rom_pp = greedy_data['rom_pp']
-    
+
+    print('\nA posteriori error analysis:')
     test_sample = parameter_space.sample_randomly(test_snapshots)
     results = reduction_error_analysis(rom,
                                        fom=fom,
@@ -107,45 +109,116 @@ def main(
                                        basis_sizes=0,
                                        pool=None
                                        )
+    print('')
 
     # Online time
-    n_online = 500
     tic = time.perf_counter()
-    for mu in parameter_space.sample_randomly(n_online):
+    for mu in parameter_space.sample_randomly(test_online):
         reductor.reconstruct(rom.solve(mu))
     toc = time.perf_counter()
-    online_time = (toc - tic)/n_online
+    online_time = (toc - tic)/test_online
 
-    tic = time.perf_counter()
-    for mu in parameter_space.sample_randomly(n_online):
-        reductor.reconstruct(rom_pp.solve(mu))
-    toc = time.perf_counter()
-    online_time_pp = (toc - tic)/n_online
-    
+    # Saving everything necessary in 'results'
     results['num_extensions'] = greedy_data['extensions']
     results['num_iterations'] = greedy_data['iterations']
-    results['max_errs_pp'] = greedy_data['max_errs_pp']
+    results['max_errs_ext'] = greedy_data['max_errs_ext']
+    results['times'] = greedy_data['greedytimes']
+    results['times']['online'] = online_time
+    results.pop('time', None)
+    results['times']['offline'] = offline_time
+    results['times']['other'] = (offline_time
+                                 - results['times']['solve']
+                                 - results['times']['evaluate']
+                                 - results['times']['extend']
+                                 - results['times']['reduce']
+                                 - results['times']['pod'])
+    results['settings'] = {'grid': grid, 'rb_size': rb_size, 'rtol': rtol,
+                           'test_snapshots': test_snapshots, 'n_online': test_online}
 
-    results['timings'] = greedy_data['greedytimes'] 
-    results['timings']['online'] = online_time  # Specify what time is saved
-    results['timings']['online_pp'] = online_time_pp  # Specify what time is saved
-    results.pop('time', None)  # Delete old key
-    results['timings']['offline_pp'] = offline_time # Also save offline time
-    results['timings']['offline'] = offline_time - results['timings']['postprocess']# Also save offline time
-
-    results['settings'] = {'grid': grid, 'rb_size': rb_size, 'rtol': rtol, 'test_snapshots': test_snapshots, 'n_online': n_online}
-
-    with open(f'thermalblock_{xblocks}x{yblocks}_N{len(pool)}_BS{batchsize}.pkl', 'wb') as fp:
-            pickle.dump(results, fp)
-
-    # global test_results
-    # test_results = results
+    # print a summary
+    version = 'POD' if use_pod else 'Bulk'
+    print(
+        "\n" + "\033[1m"+"Summary:"+"\033[0m\n"
+        "\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501"
+        "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501"
+        "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501"
+        "\u2501\u2501\u2501\u2501\n"
+        "\u2523\u2501 Configuration:\n"
+        "\u2503  \u251c\u2500 " # indentation
+        "Thermalblock:\n"
+        "\u2503  \u2502  \u251c\u2500 " # indentation
+        f"Blocks: {xblocks} by {yblocks}\n"
+        "\u2503  \u2502  \u251c\u2500 " # indentation
+        f"Values per block: {snapshots}\n"
+        "\u2503  \u2502  \u251c\u2500 " # indentation
+        f"Size of training set: {snapshots**(xblocks*yblocks)}\n"
+        "\u2503  \u2502  \u2514\u2500 " # indentation
+        f"Degrees of freedom: {fom.order}\n"
+        "\u2503  \u251c\u2500 " # indentation
+        "Batch greedy algorithm:\n"
+        "\u2503  \u2502  \u251c\u2500 " # indentation
+        f"Version: {version}\n"
+        "\u2503  \u2502  \u251c\u2500 " # indentation
+        f"Batchsize: {batchsize}\n"
+        "\u2503  \u2502  \u251c\u2500 " # indentation
+        f"Lambda: {lambda_tol}\n"
+        "\u2503  \u2502  \u2514\u2500 " # indentation
+        f"Rel. target tolerance: {rtol}\n"
+        "\u2503  \u251c\u2500 " # indentation
+        "Size of test sets:\n"
+        "\u2503  \u2502  \u251c\u2500 " # indentation
+        f"Error analysis: {test_snapshots}\n"
+        "\u2503  \u2502  \u2514\u2500 " # indentation
+        f"Online benchmark: {test_online}\n"
+        "\u2503  \u2514\u2500 " # indentation
+        f"(MPI-)Pool: {len(pool)} parallel worker(s)\n"
+        "\u2523\u2501 Computation times:\n"
+        "\u2503  \u251c\u2500 " # indentation
+        f"Offline: {results['times']['offline']:.4e} sec.\n"
+        "\u2503  \u2502  \u251c\u2500 " # indentation
+        f"Solve:    {results['times']['solve']:.4e} sec. - "
+        f"{results['times']['solve']/results['times']['offline']*100:4.1f}%\n"
+        "\u2503  \u2502  \u251c\u2500 " # indentation
+        f"Evaluate: {results['times']['evaluate']:.4e} sec. - "
+        f"{results['times']['evaluate']/results['times']['offline']*100:4.1f}%\n"
+        "\u2503  \u2502  \u251c\u2500 " # indentation
+        f"Extend:   {results['times']['extend']:.4e} sec. - "
+        f"{results['times']['extend']/results['times']['offline']*100:4.1f}%\n"
+        "\u2503  \u2502  \u251c\u2500 " # indentation
+        f"Reduce:   {results['times']['reduce']:.4e} sec. - "
+        f"{results['times']['reduce']/results['times']['offline']*100:4.1f}%\n"
+        "\u2503  \u2502  \u251c\u2500 " # indentation
+        f"POD:      {results['times']['pod']:.4e} sec. - "
+        f"{results['times']['pod']/results['times']['offline']*100:4.1f}%\n"
+        "\u2503  \u2502  \u2514\u2500 " # indentation
+        f"Other:    {results['times']['other']:.4e} sec. - "
+        f"{results['times']['other']/results['times']['offline']*100:4.1f}%\n"
+        "\u2503  \u2514\u2500 " # indentation
+        f"Online:  {results['times']['online']:.4e} sec. on average\n"
+        "\u2523\u2501 Reduced basis:\n"
+        "\u2503  \u251c\u2500 " # indentation
+        f"Final basis size:  {rom.order:4n}\n"
+        "\u2503  \u251c\u2500 " # indentation
+        f"Greedy iterations: {results['num_iterations']:4n}\n"
+        "\u2503  \u251c\u2500 " # indentation
+        "Relative error decay:\n"
+        "\u2503  \u2502       \u250a       rel. error\n"
+        "\u2503  \u2502     n \u250a (h1_0_semi_norm)\n"
+        "\u2503  \u2502  \u254c\u254c\u254c\u254c\u254c+"
+        "\u254c\u254c\u254c\u254c\u254c\u254c\u254c\u254c\u254c\u254c\u254c\u254c"
+        "\u254c\u254c\u254c\u254c\u254c\u254c"
+    )
+    for i in range(len(results['max_rel_errors'][0])):
+        print(f"\u2503  \u2502  {i:4n} \u250a       {results['max_rel_errors'][0][i]:.4e}")
+    print(
+        "\u253b\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501"
+        "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501"
+        "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501"
+        "\u2501\u2501\u2501\u2501\n\n"
+    )
 
 
 def discretize_pymor(xblocks, yblocks, grid_num_intervals, use_list_vector_array):
-    from pymor.analyticalproblems.thermalblock import thermal_block_problem
-    from pymor.discretizers.builtin import discretize_stationary_cg
-    from pymor.discretizers.builtin.list import convert_to_numpy_list_vector_array
 
     print('Discretize ...')
     # setup analytical problem
@@ -164,69 +237,6 @@ def discretize_pymor(xblocks, yblocks, grid_num_intervals, use_list_vector_array
 '''
 
     return fom, summary
-
-
-def discretize_fenics(xblocks, yblocks, grid_num_intervals, element_order):
-    from pymor.tools import mpi
-
-    if mpi.parallel:
-        from pymor.models.mpi import mpi_wrap_model
-        fom = mpi_wrap_model(lambda: _discretize_fenics(xblocks, yblocks, grid_num_intervals, element_order),
-                             use_with=True, pickle_local_spaces=False)
-    else:
-        fom = _discretize_fenics(xblocks, yblocks, grid_num_intervals, element_order)
-
-    summary = f'''FEniCS model:
-   number of blocks:      {xblocks}x{yblocks}
-   grid intervals:        {grid_num_intervals}
-   finite element order:  {element_order}
-'''
-
-    return fom, summary
-
-
-def _discretize_fenics(xblocks, yblocks, grid_num_intervals, element_order):
-
-    from pymor.analyticalproblems.thermalblock import thermal_block_problem
-    from pymor.discretizers.fenics import discretize_stationary_cg
-
-    print('Discretize ...')
-    # setup analytical problem
-    problem = thermal_block_problem(num_blocks=(xblocks, yblocks))
-
-    # discretize using continuous finite elements
-    fom, _ = discretize_stationary_cg(problem, diameter=1. / grid_num_intervals, degree=element_order)
-
-    return fom
-
-
-def reduce_batch_greedy(fom, reductor, parameter_space, snapshots_per_block,
-                        extension_alg_name, max_extensions, use_error_estimator, pool,
-                        batchsize, greedy_start, atol, parallel_batch):
-
-    from pymor.algorithms.batchgreedy import rb_batch_greedy
-
-    # run greedy
-    training_set = parameter_space.sample_uniformly(snapshots_per_block)
-    greedy_data = rb_batch_greedy(fom, reductor, training_set,
-                                  use_error_estimator=use_error_estimator, error_norm=fom.h1_0_semi_norm,
-                                  extension_params={'method': extension_alg_name}, max_extensions=max_extensions,
-                                  pool=pool, batchsize=batchsize, greedy_start=greedy_start, atol=atol, parallel_batch=parallel_batch)
-    rom = greedy_data['rom']
-
-    # generate summary
-    real_rb_size = rom.solution_space.dim
-    training_set_size = len(training_set)
-    summary = f'''Greedy basis generation:
-   size of training set:   {training_set_size}
-   error estimator used:   {use_error_estimator}
-   extension method:       {extension_alg_name}
-   prescribed basis size:  {max_extensions}
-   actual basis size:      {real_rb_size}
-   elapsed time:           {greedy_data["time"]}
-'''
-
-    return rom, summary, greedy_data
 
 
 if __name__ == '__main__':
